@@ -1,0 +1,92 @@
+{
+  "gui": {
+    "font_family": "Microsoft YaHei",
+    "font_size": 10,
+    "title_font_size": 11,
+    "window_size": "800x600",
+    "preview_auto_refresh": true
+  },
+  "watermark": {
+    "bar_height": 250,
+    "background_color": [
+      255,
+      255,
+      255
+    ],
+    "icon_max_height": 140,
+    "icon_margin_left": 30,
+    "icon_margin_right": 30,
+    "vertical_center_offset": 40,
+    "left_text": {
+      "camera": {
+        "x_offset": 0,
+        "y": 0
+      },
+      "lens": {
+        "x_offset": 0,
+        "y": 50
+      },
+      "name": {
+        "x_offset": 0,
+        "y": 70
+      }
+    },
+    "right_text": {
+      "params": {
+        "x_offset": -30,
+        "y": 0
+      },
+      "time": {
+        "x_offset": -30,
+        "y": 50
+      }
+    },
+    "fonts": {
+      "camera": 60,
+      "lens": 46,
+      "name": 50,
+      "params": 60,
+      "time": 46
+    },
+    "colors": {
+      "camera": [
+        0,
+        0,
+        0
+      ],
+      "lens": [
+        80,
+        80,
+        80
+      ],
+      "name": [
+        30,
+        30,
+        30
+      ],
+      "params": [
+        0,
+        0,
+        0
+      ],
+      "time": [
+        80,
+        80,
+        80
+      ]
+    },
+    "stroke": {
+      "enabled": true,
+      "width": 2,
+      "fill": [
+        255,
+        255,
+        255
+      ]
+    }
+  },
+  "brand_icons": {},
+  "model_short_names": {},
+  "brand_fix_map": {},
+  "camera_database": {}
+}
