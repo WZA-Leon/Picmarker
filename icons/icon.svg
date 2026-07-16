@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 720" width="720" height="720">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 700" width="700" height="700">
   <g transform="matrix(50,0,0,-50,350,350)" stroke="black" stroke-width="0.3" stroke-linejoin="round">
     <!-- 外框外围（天蓝色） -->
     <path d="M -6,-7 L 6,-7 A 1 1 0 0 1 7 -6 L 7 6 A 1 1 0 0 1 6 7 L -6 7 A 1 1 0 0 1 -7 6 L -7 -6 A 1 1 0 0 1 -6 -7 Z" fill="skyblue" />

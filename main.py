@@ -456,9 +456,10 @@ class WatermarkGenerator:
 class PhotoWatermarkApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("相机水印工具 v2.3")
+        self.root.title("Picmarker V1.3 - 批量图片水印工具")
         self.root.geometry(GUI_CFG.get("window_size", "1200x900"))
         self.root.minsize(1000, 700)
+        self.root.iconbitmap('icons/icon.ico')
         self.root.state("zoomed")
         self.input_files = []
         self.current_index = -1
