@@ -166,9 +166,8 @@ class PhotoWatermarkApp:
         ttk.Label(hidden_frame, text="⚠ 处理速度较慢，请耐心等待", foreground="orange").grid(row=2, column=0, columnspan=2, pady=5)
         btn_hidden = ttk.Button(hidden_frame, text="批量嵌入盲水印", command=self.batch_embed_hidden)
         btn_hidden.grid(row=3, column=0, columnspan=2, pady=3)
-        ttk.Label(hidden_frame, text="提取盲水印:", foreground="gray").grid(row=4, column=0, columnspan=2, pady=(10,0))
-        btn_extract = ttk.Button(hidden_frame, text="提取当前图片盲水印", command=self.extract_hidden)
-        btn_extract.grid(row=5, column=0, columnspan=2, pady=3)
+        ttk.Label(hidden_frame, text="💡 提取盲水印请使用命令行工具:", foreground="gray").grid(row=4, column=0, columnspan=2, pady=(10,0))
+        ttk.Label(hidden_frame, text="python extract_blind.py <图片路径>", foreground="#0078D4").grid(row=5, column=0, columnspan=2, pady=3)
         right_frame = ttk.Frame(main_pw)
         main_pw.add(right_frame, weight=1)
         path_frame = ttk.LabelFrame(right_frame, text="💾 输出设置")
@@ -656,46 +655,9 @@ class PhotoWatermarkApp:
             self.root.after(0, lambda: messagebox.showinfo("完成", f"盲水印嵌入完成\n成功 {success}/{total}"))
         threading.Thread(target=worker, daemon=True).start()
 
-    def extract_hidden(self):
-        if not self.input_files or self.current_index == -1:
-            messagebox.showwarning("提示", "请先选择图片")
-            return
-        pwd = self.hidden_pwd.get().strip()
-        if not pwd:
-            messagebox.showerror("错误", "请输入密码")
-            return
-        path = self.input_files[self.current_index]
-        dlg = ProgressDialog(self.root, "提取盲水印...")
-        dlg.set_text("正在提取...")
-        def worker():
-            try:
-                from blind_watermark import WaterMark
-            except ImportError:
-                self.root.after(0, dlg.close)
-                self.root.after(0, lambda: messagebox.showerror("错误", "请先安装 blind-watermark"))
-                return
-            try:
-                bw = WaterMark(password_img=int(pwd), password_wm=int(pwd))
-                from PIL import Image
-                import numpy as np
-                pil_img = Image.open(path).convert('RGB')
-                img_cv = np.array(pil_img)[:, :, ::-1]
-                len_path = path + '.len'
-                if os.path.exists(len_path):
-                    with open(len_path) as lf:
-                        wm_shape = int(lf.read())
-                else:
-                    self.root.after(0, dlg.close)
-                    self.root.after(0, lambda: messagebox.showerror("错误", "找不到 .len 文件"))
-                    return
-                wm_extract = bw.extract(embed_img=img_cv, wm_shape=wm_shape, mode='str')
-                self.root.after(0, dlg.close)
-                self.root.after(0, lambda: messagebox.showinfo("提取结果",
-                    f"图片: {os.path.basename(path)}\n密码: {pwd}\n\n提取内容:\n{wm_extract}"))
-            except Exception as e:
-                self.root.after(0, dlg.close)
-                self.root.after(0, lambda: messagebox.showerror("提取失败", f"密码错误或图片不含盲水印\n\n{str(e)}"))
-        threading.Thread(target=worker, daemon=True).start()
+        
+
+    
     
 
     
