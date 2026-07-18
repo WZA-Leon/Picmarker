@@ -109,33 +109,45 @@ class FontManager:
 class WatermarkGenerator:
     @staticmethod
     def get_font(name, size):
-        # 实现同原代码，放在 utils 中
         try:
             if platform.system() == "Windows":
-                font_paths = [
-                    f"C:/Windows/Fonts/{name}.ttc",
-                    f"C:/Windows/Fonts/{name}.ttf",
-                    "C:/Windows/Fonts/msyh.ttc",
-                    "C:/Windows/Fonts/msyhbd.ttc",
-                    "C:/Windows/Fonts/simhei.ttf",
-                    "C:/Windows/Fonts/arial.ttf"
-                ]
-                for p in font_paths:
-                    if os.path.exists(p):
-                        return ImageFont.truetype(p, size)
+                # 1. 注册表查找：字体名 → 实际文件名
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                      r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
                 i = 0
+                best_match = None
                 while True:
                     try:
                         fname, fpath, _ = winreg.EnumValue(key, i)
-                        if name.lower() in fname.lower():
+                        # 注册表项名格式如 "Arial (TrueType)"，去掉后缀比较
+                        clean_name = fname.replace(" (TrueType)", "").replace(" (OpenType)", "")
+                        if name.lower() == clean_name.lower():
                             full_path = os.path.join("C:/Windows/Fonts", fpath)
                             if os.path.exists(full_path):
                                 return ImageFont.truetype(full_path, size)
+                        # 记录模糊匹配（首次匹配）
+                        if name.lower() in fname.lower() and best_match is None:
+                            best_match = fpath
                         i += 1
                     except:
                         break
+                # 2. 模糊匹配
+                if best_match:
+                    full_path = os.path.join("C:/Windows/Fonts", best_match)
+                    if os.path.exists(full_path):
+                        return ImageFont.truetype(full_path, size)
+
+                # 3. 尝试 name 直接作为文件名
+                for ext in [".ttc", ".ttf"]:
+                    p = f"C:/Windows/Fonts/{name}{ext}"
+                    if os.path.exists(p):
+                        return ImageFont.truetype(p, size)
+
+                # 4. 最终回退
+                for fallback in ["msyh.ttc", "arial.ttf", "simhei.ttf"]:
+                    p = f"C:/Windows/Fonts/{fallback}"
+                    if os.path.exists(p):
+                        return ImageFont.truetype(p, size)
             else:
                 for p in [
                     f"/System/Library/Fonts/{name}.ttc",
@@ -144,10 +156,9 @@ class WatermarkGenerator:
                 ]:
                     if os.path.exists(p):
                         return ImageFont.truetype(p, size)
-        except:
-            pass
+        except Exception as e:
+            print(f"[Font] ERROR loading '{name}': {e}")
         return ImageFont.load_default()
-
     @staticmethod
     def resize_by_height(img, target_h):
         w, h = img.size
@@ -192,7 +203,7 @@ class WatermarkGenerator:
         font_param = WatermarkGenerator.get_font(font_name, fc["params"])
         font_time = WatermarkGenerator.get_font(font_name, fc["time"])
         icon = WatermarkGenerator.load_brand_icon(data["brand"])
-        icon_y = h + (bar_h - icon.height)//2
+        icon_y = h + (bar_h - icon.height)//2-10
         new_img.paste(icon, (icon_left, icon_y), icon)
         left_x = icon_left + icon.width + icon_right
         base_y = h + (bar_h//2) - v_off
@@ -202,16 +213,10 @@ class WatermarkGenerator:
                   stroke_width=stroke_w, stroke_fill=stroke_c)
         lens_pos = (left_x + left_cfg["lens"]["x_offset"], base_y + left_cfg["lens"]["y"])
         draw.text(lens_pos, data["lens"], fill=tuple(colors["lens"]), font=font_len,
-                  stroke_width=stroke_w, stroke_fill=stroke_c)
-        if data["photo_name"]:
-            name_pos = (left_x + left_cfg["name"]["x_offset"], base_y + left_cfg["name"]["y"])
-            draw.text(name_pos, data["photo_name"], fill=tuple(colors["name"]), font=font_name_f,
-                      stroke_width=stroke_w, stroke_fill=stroke_c)
+                                    stroke_width=stroke_w, stroke_fill=stroke_c)
         right_cfg = WM_CFG["right_text"]
         param_text = f"{data['focal']}  {data['f']}  {data['exp']}  {data['iso']}"
         time_text = f"{data['datetime']}"
-        if data['location']:
-            time_text += f" | {data['location']}"
         param_w = draw.textlength(param_text, font=font_param)
         time_w = draw.textlength(time_text, font=font_time)
         param_x = w + right_cfg["params"]["x_offset"] - param_w

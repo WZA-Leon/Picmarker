@@ -19,13 +19,13 @@ DEFAULT_SETTINGS = {
         "icon_margin_left": 40,
         "icon_margin_right": 40,
         "vertical_center_offset": 30,
-        "left_text": {
-            "camera": {"x_offset": 0, "y": -40},
+                "left_text": {
+            "camera": {"x_offset": 0, "y": -55},
             "lens": {"x_offset": 0, "y": 10},
             "name": {"x_offset": 0, "y": 60}
         },
         "right_text": {
-            "params": {"x_offset": -40, "y": -40},
+            "params": {"x_offset": -40, "y": -55},
             "time": {"x_offset": -40, "y": 10}
         },
         "fonts": {

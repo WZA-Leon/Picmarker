@@ -20,21 +20,17 @@
     "left_text": {
       "camera": {
         "x_offset": 0,
-        "y": 0
+        "y": -50
       },
       "lens": {
         "x_offset": 0,
-        "y": 50
-      },
-      "name": {
-        "x_offset": 0,
-        "y": 70
+        "y": 45
       }
     },
     "right_text": {
       "params": {
         "x_offset": -30,
-        "y": 0
+        "y": -50
       },
       "time": {
         "x_offset": -30,

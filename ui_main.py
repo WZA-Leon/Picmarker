@@ -2,6 +2,10 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, font as tkfont
 from PIL import Image, ImageTk
+try:
+    RESAMPLE = Image.Resampling.LANCZOS
+except:
+    RESAMPLE = Image.LANCZOS
 import os
 import threading
 from pathlib import Path
@@ -82,8 +86,8 @@ class PhotoWatermarkApp:
         # 功能启用/禁用开关
         enable_frame = ttk.LabelFrame(self.left_scroll_content, text="功能开关", padding="3")
         enable_frame.pack(fill="x", pady=3)
-        self.enable_border = tk.BooleanVar(value=True)
-        self.enable_watermark = tk.BooleanVar(value=True)
+        self.enable_border = tk.BooleanVar(value=False)
+        self.enable_watermark = tk.BooleanVar(value=False)
         self.enable_hidden = tk.BooleanVar(value=False)
         ttk.Checkbutton(enable_frame, text="添加边框", variable=self.enable_border, command=self.show_preview).pack(side="left", padx=3)
         ttk.Checkbutton(enable_frame, text="明文水印", variable=self.enable_watermark, command=self.show_preview).pack(side="left", padx=3)
@@ -106,31 +110,18 @@ class PhotoWatermarkApp:
         panel_border.pack(fill="x", pady=3)
         param_frame = ttk.LabelFrame(panel_border.content, text="✏️ 水印参数")
         param_frame.pack(fill=tk.X, pady=(0, 5))
-        row1 = ttk.Frame(param_frame)
-        row1.pack(fill=tk.X, padx=8, pady=4)
-        row2 = ttk.Frame(param_frame)
-        row2.pack(fill=tk.X, padx=8, pady=4)
-        row3 = ttk.Frame(param_frame)
-        row3.pack(fill=tk.X, padx=8, pady=4)
-        row4 = ttk.Frame(param_frame)
-        row4.pack(fill=tk.X, padx=8, pady=4)
-        row5 = ttk.Frame(param_frame)
-        row5.pack(fill=tk.X, padx=8, pady=4)
-        row6 = ttk.Frame(param_frame)
-        row6.pack(fill=tk.X, padx=8, pady=4)
-        row7 = ttk.Frame(param_frame)
-        row7.pack(fill=tk.X, padx=8, pady=4)
-        row8 = ttk.Frame(param_frame)
-        row8.pack(fill=tk.X, padx=8, pady=4)
-        row9 = ttk.Frame(param_frame)
-        row9.pack(fill=tk.X, padx=8, pady=4)
-        row10 = ttk.Frame(param_frame)
-        row10.pack(fill=tk.X, padx=8, pady=4)
-        row11 = ttk.Frame(param_frame)
-        row11.pack(fill=tk.X, padx=8, pady=4)
+        
+        #循环创建行
+        rows = []
+        for i in range(8):
+            row = ttk.Frame(param_frame)
+            row.pack(fill=tk.X, padx=8, pady=4)
+            rows.append(row)
+        row1, row2, row3, row4, row5, row6, row7, row8 = rows
+
+        #粘贴左侧明文水印的功能到行里
         ttk.Label(row1, text="品牌：", width=6).pack(side=tk.LEFT)
-        self.cbo_brand = ttk.Combobox(row1, textvariable=self.brand_var,
-                                      values=list(CAMERA_DB.keys()), width=20, state="readonly")
+        self.cbo_brand = ttk.Combobox(row1, textvariable=self.brand_var,values=list(CAMERA_DB.keys()), width=20, state="readonly")
         self.cbo_brand.pack(side=tk.LEFT, padx=(0, 10))
         self.cbo_brand.bind("<<ComboboxSelected>>", self.on_brand_change)
         self.cbo_brand.bind("<KeyRelease>", lambda e: self.on_brand_change())
@@ -143,28 +134,16 @@ class PhotoWatermarkApp:
         self.cbo_len = ttk.Combobox(row3, textvariable=self.lens_var, width=20, state="readonly")
         self.cbo_len.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_len.pack(side=tk.LEFT)
-        ttk.Label(row4, text="标题：", width=6).pack(side=tk.LEFT)
-        entry_name = ttk.Entry(row4, textvariable=self.photo_name_var, width=20, state="normal")
-        entry_name.pack(side=tk.LEFT, padx=(0, 10))
-        entry_name.bind("<KeyRelease>", lambda e: self.show_preview())
-        ttk.Label(row5, text="焦距：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row5, textvariable=self.focal_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Label(row6, text="光圈：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row6, textvariable=self.f_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Label(row7, text="快门：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row7, textvariable=self.exp_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Label(row8, text="ISO：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row8, textvariable=self.iso_var, width=20, state="readonly").pack(side=tk.LEFT)
-        ttk.Label(row9, text="时间：", width=6).pack(side=tk.LEFT)
-        entry_time = ttk.Entry(row9, textvariable=self.time_var, width=20, state="normal")
-        entry_time.pack(side=tk.LEFT, padx=(0, 10))
-        entry_time.bind("<KeyRelease>", lambda e: self.show_preview())
-        ttk.Label(row10, text="地点：", width=6).pack(side=tk.LEFT)
-        entry_loc = ttk.Entry(row10, textvariable=self.loc_var, width=20, state="normal")
-        entry_loc.pack(side=tk.LEFT, padx=(0, 10))
-        entry_loc.bind("<KeyRelease>", lambda e: self.show_preview())
-        ttk.Label(row11, text="字体：", width=6).pack(side=tk.LEFT)
-        self.font_cb = ttk.Combobox(row11, textvariable=self.selected_font,values=self.font_list, width=20, state="readonly")
+        ttk.Label(row4, text="焦距：", width=6).pack(side=tk.LEFT)
+        ttk.Entry(row4, textvariable=self.focal_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(row5, text="光圈：", width=6).pack(side=tk.LEFT)
+        ttk.Entry(row5, textvariable=self.f_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(row6, text="快门：", width=6).pack(side=tk.LEFT)
+        ttk.Entry(row6, textvariable=self.exp_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Label(row7, text="ISO：", width=6).pack(side=tk.LEFT)
+        ttk.Entry(row7, textvariable=self.iso_var, width=20, state="readonly").pack(side=tk.LEFT)
+        ttk.Label(row8, text="字体：", width=6).pack(side=tk.LEFT)
+        self.font_cb = ttk.Combobox(row8, textvariable=self.selected_font,values=self.font_list, width=20, state="readonly")
         self.font_cb.pack(side=tk.LEFT)
         self.font_cb.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         # ========== 第二个折叠面板：明文水印，内部嵌入Picmarker完整界面 ==========
@@ -213,8 +192,6 @@ class PhotoWatermarkApp:
         ttk.Button(action_frame, text="🔄 刷新预览", command=self.show_preview).pack(side=tk.LEFT, padx=2)
         ttk.Button(action_frame, text="🎨 添加水印(当前)", command=self.add_watermark_current).pack(side=tk.LEFT, padx=2)
         ttk.Button(action_frame, text="⚙ 设置编辑器", command=self.open_settings_editor).pack(side=tk.LEFT, padx=2)
-        # 原有独立启动Picmarker按钮保留，作为备用入口
-        ttk.Button(action_frame, text="📷 水印工具(独立窗口)", command=self.open_picmarker).pack(side=tk.LEFT, padx=2)
         ttk.Button(action_frame, text="📦 批量处理(全部)", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
         self.progress = ttk.Progressbar(right_frame, orient=tk.HORIZONTAL)
         self.progress.pack(fill=tk.X, pady=(0, 3))
@@ -290,7 +267,8 @@ class PhotoWatermarkApp:
                 self.listbox.selection_set(0)
                 self.current_index = 0
                 self._update_preview_for_current()
-            self.show_preview()
+            # 后台生成所有图片的缩略图缓存
+            threading.Thread(target=self._precache_all_thumbnails, daemon=True).start()
     def delete_selected(self):
         sel = self.listbox.curselection()
         if not sel:
@@ -409,58 +387,124 @@ class PhotoWatermarkApp:
             "datetime": self.time_var.get().strip(),
             "location": self.loc_var.get().strip()
         }
+    def _precache_all_thumbnails(self):
+        """后台预生成所有图片的缩略图缓存"""
+        temp_dir = Path(__file__).parent / "temp"
+        temp_dir.mkdir(exist_ok=True)
+        for path in self.input_files:
+            img_hash = hash(path) & 0xFFFFFFFF
+            cache_path = temp_dir / f"_thumb_{img_hash:x}.jpg"
+            if cache_path.exists():
+                continue
+            try:
+                with Image.open(path) as img:
+                    scale = min(800/img.width, 600/img.height, 1.0)
+                    thumb = img.resize((int(img.width*scale), int(img.height*scale)), RESAMPLE)
+                    thumb.convert("RGB").save(cache_path, quality=85)
+            except:
+                pass
+
     def _get_preview_hash(self):
-        """生成当前预览参数的哈希值，用于判断是否需要重新生成"""
+        """生成当前预览参数的确定性哈希值"""
+        import hashlib
         data = self.get_data()
         wm = self.simple_watermark_panel
         wm_text = wm.watermark_text.get() if wm else ""
         wm_font = wm.font_family.get() if wm else ""
         wm_size = wm.font_size.get() if wm else 0
         wm_color = wm.font_color_var.get() if wm else ""
-        return hash((
-            self.current_index,
-            self.enable_border.get(),
-            self.enable_watermark.get(),
-            self.selected_font.get(),
-            data["brand"], data["camera"], data["lens"], data["photo_name"],
-            data["focal"], data["f"], data["exp"], data["iso"],
-            data["datetime"], data["location"],
-            wm_text, wm_font, wm_size, wm_color
-        ))
+        raw = f"{self.current_index}|{self.enable_border.get()}|{self.enable_watermark.get()}|{self.selected_font.get()}|{data['brand']}|{data['camera']}|{data['lens']}|{data['photo_name']}|{data['focal']}|{data['f']}|{data['exp']}|{data['iso']}|{data['datetime']}|{data['location']}|{wm_text}|{wm_font}|{wm_size}|{wm_color}"
+        return hashlib.md5(raw.encode()).hexdigest()
 
     def show_preview(self):
         if not self.input_files or self.current_index == -1:
             return
         try:
-            os.makedirs(self.output_path.get(), exist_ok=True)
+            temp_dir = Path(__file__).parent / "temp"
+            temp_dir.mkdir(exist_ok=True)
             img_path = self.input_files[self.current_index]
-            cur_hash = self._get_preview_hash()
             cw = max(self.canvas.winfo_width(), 100)
             ch = max(self.canvas.winfo_height(), 100)
-            if self._cached_preview_path and self._cached_preview_path.exists() and self._cached_params.get("hash") == cur_hash:
+            cur_hash = self._get_preview_hash()
+            if self._cached_params.get("hash") == cur_hash and self._cached_preview_path and self._cached_preview_path.exists():
                 im = Image.open(self._cached_preview_path)
             else:
-                tmp_full = Path(self.output_path.get()) / "_tmp_preview_full.jpg"
-                # 在原图上处理水印
+                # 1. 打开原图缩略到预览尺寸
+                with Image.open(img_path) as full_img:
+                    scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
+                    thumb_size = (int(full_img.width*scale), int(full_img.height*scale))
+                    thumb = full_img.resize(thumb_size, RESAMPLE).convert("RGBA")
+
+                # 2. 在缩略图上直接绘制边框水印（按比例缩放参数）
                 if self.enable_border.get():
-                    WatermarkGenerator.add_watermark(img_path, str(tmp_full), self.get_data(), self.selected_font.get())
-                else:
-                    shutil.copy2(img_path, str(tmp_full))
+                    from PIL import ImageDraw
+                    data = self.get_data()
+                    font_name = self.selected_font.get()
+                    tw, th = thumb.size
+                                        # 计算原图→缩略图的比例（用宽度比，确保宽高比一致）
+                    with Image.open(img_path) as full_img:
+                        scale_ratio = tw / full_img.width
+                    from config import WM_CFG
+                    bar_h = int(WM_CFG["bar_height"] * scale_ratio)
+                    bg = tuple(WM_CFG["background_color"])
+                    bordered = Image.new("RGBA", (tw, th + bar_h), bg + (255,))
+                    bordered.paste(thumb, (0, 0))
+                    draw = ImageDraw.Draw(bordered)
+                    fc = WM_CFG["fonts"]
+                    colors = WM_CFG["colors"]
+                    font_cam = WatermarkGenerator.get_font(font_name, max(1, int(fc["camera"] * scale_ratio)))
+                    font_len = WatermarkGenerator.get_font(font_name, max(1, int(fc["lens"] * scale_ratio)))
+                    font_param = WatermarkGenerator.get_font(font_name, max(1, int(fc["params"] * scale_ratio)))
+                    font_time = WatermarkGenerator.get_font(font_name, max(1, int(fc["time"] * scale_ratio)))
+                     # 加载图标，与 add_watermark 一致：固定高度 icon_max_height，再按 scale_ratio 缩放
+                    icon = WatermarkGenerator.load_brand_icon(data["brand"])
+                    icon_h = max(1, int(icon.height * scale_ratio))
+                    icon = icon.resize((max(1, int(icon.width * scale_ratio)), icon_h), RESAMPLE)
+                    icon_left = int(WM_CFG["icon_margin_left"] * scale_ratio)
+                    icon_y = th + (bar_h - icon.height) // 2
+                    bordered.paste(icon, (icon_left, icon_y), icon)
+                    left_x = icon_left + icon.width + int(WM_CFG["icon_margin_right"] * scale_ratio)
+                    base_y = th + (bar_h // 2) - int(WM_CFG["vertical_center_offset"] * scale_ratio)
+                    stroke_en = WM_CFG["stroke"]["enabled"]
+                    stroke_w = int(WM_CFG["stroke"]["width"] * scale_ratio) if stroke_en else 0
+                    stroke_c = tuple(WM_CFG["stroke"]["fill"]) if stroke_en else None
+                    left_cfg = WM_CFG["left_text"]
+                    draw.text((left_x + int(left_cfg["camera"]["x_offset"] * scale_ratio),
+                               base_y + int(left_cfg["camera"]["y"] * scale_ratio)),
+                              data["camera"], fill=tuple(colors["camera"]), font=font_cam,
+                              stroke_width=stroke_w, stroke_fill=stroke_c)
+                    draw.text((left_x + int(left_cfg["lens"]["x_offset"] * scale_ratio),
+                               base_y + int(left_cfg["lens"]["y"] * scale_ratio)),
+                              data["lens"], fill=tuple(colors["lens"]), font=font_len,
+                              stroke_width=stroke_w, stroke_fill=stroke_c)
+                    right_cfg = WM_CFG["right_text"]
+                    param_text = f"{data['focal']}  {data['f']}  {data['exp']}  {data['iso']}"
+                    time_text = f"{data['datetime']}"
+                    param_w = draw.textlength(param_text, font=font_param)
+                    time_w = draw.textlength(time_text, font=font_time)
+                    draw.text((tw + int(right_cfg["params"]["x_offset"] * scale_ratio) - param_w,
+                               base_y + int(right_cfg["params"]["y"] * scale_ratio)),
+                              param_text, fill=tuple(colors["params"]), font=font_param,
+                              stroke_width=stroke_w, stroke_fill=stroke_c)
+                    draw.text((tw + int(right_cfg["time"]["x_offset"] * scale_ratio) - time_w,
+                               base_y + int(right_cfg["time"]["y"] * scale_ratio)),
+                              time_text, fill=tuple(colors["time"]), font=font_time,
+                              stroke_width=stroke_w, stroke_fill=stroke_c)
+                    thumb = bordered
+
+                # 3. 在缩略图上叠加明文水印
                 if self.enable_watermark.get() and self.simple_watermark_panel:
                     wm = self.simple_watermark_panel
                     if wm.watermark_text.get().strip():
-                        img = Image.open(tmp_full).convert("RGBA")
                         font = wm.get_font(wm.font_family.get(), wm.font_size.get())
                         color = wm.color_map[wm.font_color_var.get()]
-                        wm.add_scattered_watermarks(img, wm.watermark_text.get(), font, color)
-                        img.convert("RGB").save(tmp_full, quality=95)
-                # 缩略到预览尺寸
-                tmp_thumb = Path(self.output_path.get()) / "_tmp_thumb.jpg"
-                with Image.open(tmp_full) as full_img:
-                    scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
-                    thumb = full_img.resize((int(full_img.width*scale), int(full_img.height*scale)), RESAMPLE)
-                    thumb.save(tmp_thumb, quality=85)
-                tmp_full.unlink(missing_ok=True)
+                        overlay = Image.new("RGBA", thumb.size, (0, 0, 0, 0))
+                        wm.add_scattered_watermarks(overlay, wm.watermark_text.get(), font, color)
+                        thumb = Image.alpha_composite(thumb, overlay)
+
+                                # 4. 保存预览缩略图到缓存（使用参数哈希，避免覆盖后台缓存）
+                tmp_thumb = temp_dir / f"_preview_{cur_hash}.jpg"
+                thumb.convert("RGB").save(tmp_thumb, quality=85)
                 self._cached_preview_path = tmp_thumb
                 self._cached_params["hash"] = cur_hash
                 im = Image.open(tmp_thumb)
@@ -479,7 +523,10 @@ class PhotoWatermarkApp:
         name = os.path.basename(path)
         out = os.path.join(self.output_path.get(), f"Watermark_{name}")
         try:
-            WatermarkGenerator.add_watermark(path, out, self.get_data(), self.selected_font.get())
+            if self.enable_border.get():
+                WatermarkGenerator.add_watermark(path, out, self.get_data(), self.selected_font.get())
+            else:
+                shutil.copy2(path, out)
             # 应用明文水印
             if self.enable_watermark.get() and self.simple_watermark_panel:
                 wm = self.simple_watermark_panel
@@ -523,7 +570,10 @@ class PhotoWatermarkApp:
                         "datetime": info.get("datetime", ""),
                         "location": ""
                     }
-                    WatermarkGenerator.add_watermark(f, out, data, font)
+                    if self.enable_border.get():
+                        WatermarkGenerator.add_watermark(f, out, data, font)
+                    else:
+                        shutil.copy2(f, out)
                     # 应用明文水印
                     if self.enable_watermark.get() and self.simple_watermark_panel:
                         wm = self.simple_watermark_panel
@@ -549,9 +599,13 @@ class PhotoWatermarkApp:
         editor_path = Path(__file__).parent / "edit.py"
         if editor_path.exists():
             subprocess.Popen(["python", str(editor_path)])
+
+
+
+            
         else:
             messagebox.showerror("错误", f"未找到 {editor_path}")
-        return
+            return
     
     def batch_embed_hidden(self):
         if not self.input_files:
@@ -565,41 +619,7 @@ class PhotoWatermarkApp:
         total = len(self.input_files)
         output_dir = self.output_path.get()
         os.makedirs(output_dir, exist_ok=True)
-
-    def worker():
-        pass
-        '''success = 0
-        try:
-            from blind_watermark import WaterMark
-        except ImportError:
-            self.root.after(0, lambda: messagebox.showerror("错误", "未安装 blind-watermark 库"))
-            self.root.after(0, lambda: self.status_var.set("❌ 缺少 blind-watermark 库"))
-            return
-        for i, f in enumerate(self.input_files):
-            name = os.path.basename(f)
-            out = os.path.join(output_dir, f"hidden_{name}")
-            len_path = out + '.len'
-            try:
-                bw = WaterMark(password_img=int(pwd), password_wm=int(pwd))
-                bw.read_img(f)
-                bw.read_wm(text, mode='str')
-                bw.embed(out)
-                with open(len_path, 'w') as lf:
-                    lf.write(str(len(text)))
-                success += 1
-                # 更新进度（必须在主线程更新 UI）
-                self.root.after(0, lambda v=i+1: self.progress.configure(value=v))
-                self.root.after(0, lambda s=f"嵌入中 {i+1}/{total}": self.status_var.set(s))
-            except Exception as e:
-                print(f"嵌入失败 {name}: {e}")
-                self.root.after(0, lambda s=f"❌ {name} 失败": self.status_var.set(s))
-
-        self.root.after(0, lambda: self.progress.configure(value=0))
-        self.root.after(0, lambda: self.status_var.set(f"✅ 完成 {success}/{total}"))
-        self.root.after(0, lambda: messagebox.showinfo("盲水印嵌入完成",
-            f"成功 {success}/{total} 张\n密码: {pwd}\n保存路径: {output_dir}"))
-
-    threading.Thread(target=worker, daemon=True).start()'''
+        messagebox.showinfo("提示", "盲水印功能尚未实现")
 
     def extract_hidden(self):
         if not self.input_files or self.current_index == -1:
@@ -642,10 +662,7 @@ class PhotoWatermarkApp:
                 self.root.after(0, lambda: self.status_var.set("❌ 提取失败"))
                 self.root.after(0, lambda: messagebox.showerror("提取失败", f"密码错误或图片不含盲水印\n\n{str(e)}"))
 
-    def open_picmarker(self):
-        import subprocess
-        marker_path = Path(__file__).parent / "Picmarker.py"
-        if marker_path.exists():
-            subprocess.Popen(["python", str(marker_path)])
-        else:
-            messagebox.showerror("错误", f"未找到 {marker_path}")
+        threading.Thread(target=worker, daemon=True).start()
+    
+
+    
