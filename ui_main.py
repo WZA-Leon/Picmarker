@@ -15,6 +15,7 @@ import subprocess
 from config import GUI_CFG, CAMERA_DB
 from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel
 from ui_watermark import WatermarkApp
+from progress_util import ProgressDialog
 
 
 class PhotoWatermarkApp:
@@ -429,6 +430,8 @@ class PhotoWatermarkApp:
             if self._cached_params.get("hash") == cur_hash and self._cached_preview_path and self._cached_preview_path.exists():
                 im = Image.open(self._cached_preview_path)
             else:
+                dlg = ProgressDialog(self.root, "生成预览...")
+                dlg.set_text("正在渲染预览图...")
                 # 1. 打开原图缩略到预览尺寸
                 with Image.open(img_path) as full_img:
                     scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
@@ -502,17 +505,20 @@ class PhotoWatermarkApp:
                         wm.add_scattered_watermarks(overlay, wm.watermark_text.get(), font, color)
                         thumb = Image.alpha_composite(thumb, overlay)
 
-                                # 4. 保存预览缩略图到缓存（使用参数哈希，避免覆盖后台缓存）
+                # 4. 保存预览缩略图到缓存（使用参数哈希，避免覆盖后台缓存）
                 tmp_thumb = temp_dir / f"_preview_{cur_hash}.jpg"
                 thumb.convert("RGB").save(tmp_thumb, quality=85)
                 self._cached_preview_path = tmp_thumb
                 self._cached_params["hash"] = cur_hash
                 im = Image.open(tmp_thumb)
+                dlg.close()
             self.preview_img = ImageTk.PhotoImage(im)
             self.canvas.delete("all")
             self.canvas.create_image(cw//2, ch//2, image=self.preview_img, anchor=tk.CENTER)
             self.preview_label.config(text=f"预览: {os.path.basename(self.input_files[self.current_index])}")
         except Exception as e:
+            if 'dlg' in dir():
+                dlg.close()
             self.status_var.set(f"预览失败: {str(e)}")
     def add_watermark_current(self):
         if not self.input_files or self.current_index == -1:
@@ -522,6 +528,8 @@ class PhotoWatermarkApp:
         path = self.input_files[self.current_index]
         name = os.path.basename(path)
         out = os.path.join(self.output_path.get(), f"Watermark_{name}")
+        dlg = ProgressDialog(self.root, "处理中...")
+        dlg.set_text(f"正在添加水印: {name}")
         try:
             if self.enable_border.get():
                 WatermarkGenerator.add_watermark(path, out, self.get_data(), self.selected_font.get())
@@ -536,9 +544,11 @@ class PhotoWatermarkApp:
                     color = wm.color_map[wm.font_color_var.get()]
                     wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
                     img.convert("RGB").save(out, quality=95)
+            dlg.close()
             self.status_var.set(f"已完成: {name}")
             messagebox.showinfo("完成", f"水印已保存到:\n{out}")
         except Exception as e:
+            dlg.close()
             messagebox.showerror("错误", f"处理失败: {str(e)}")
     def start_batch(self):
         if not self.input_files:
@@ -550,13 +560,14 @@ class PhotoWatermarkApp:
         font = self.selected_font.get()
         total = len(self.input_files)
         self.progress["maximum"] = total
+        dlg = ProgressDialog(self.root, "批量处理...")
+        dlg.set_text(f"正在处理 0/{total}")
         def worker():
             success = 0
             for i, f in enumerate(self.input_files):
                 name = os.path.basename(f)
                 out = os.path.join(self.output_path.get(), f"Watermark_{name}")
                 try:
-                    # 每张图片单独读取 EXIF 生成数据
                     info = ExifReader.get_exif_full(f)
                     data = {
                         "brand": info.get("make", ""),
@@ -574,7 +585,6 @@ class PhotoWatermarkApp:
                         WatermarkGenerator.add_watermark(f, out, data, font)
                     else:
                         shutil.copy2(f, out)
-                    # 应用明文水印
                     if self.enable_watermark.get() and self.simple_watermark_panel:
                         wm = self.simple_watermark_panel
                         if wm.watermark_text.get().strip():
@@ -587,11 +597,12 @@ class PhotoWatermarkApp:
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
                 self.progress["value"] = i + 1
+                self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
                 self.status_var.set(f"处理中... {i+1}/{total}")
-                self.root.update()
             self.progress["value"] = 0
+            self.root.after(0, dlg.close)
             self.status_var.set(f"完成！成功 {success}/{total}")
-            messagebox.showinfo("批量处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}")
+            self.root.after(0, lambda: messagebox.showinfo("批量处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
         threading.Thread(target=worker, daemon=True).start()
     def open_settings_editor(self):
         
@@ -619,7 +630,31 @@ class PhotoWatermarkApp:
         total = len(self.input_files)
         output_dir = self.output_path.get()
         os.makedirs(output_dir, exist_ok=True)
-        messagebox.showinfo("提示", "盲水印功能尚未实现")
+        dlg = ProgressDialog(self.root, "嵌入盲水印...")
+        dlg.set_text(f"正在处理 0/{total}")
+        def worker():
+            success = 0
+            for i, f in enumerate(self.input_files):
+                name = os.path.basename(f)
+                out = os.path.join(output_dir, f"Hidden_{name}")
+                try:
+                    from blind_watermark import WaterMark
+                    bw = WaterMark(password_img=int(pwd), password_wm=int(pwd))
+                    bw.read_img(f).read_wm(text, mode='str').embed(out)
+                    len_path = out + '.len'
+                    with open(len_path, 'w') as lf:
+                        lf.write(str(len(text)))
+                    success += 1
+                except ImportError:
+                    self.root.after(0, lambda: messagebox.showerror("错误", "请先安装 blind-watermark"))
+                    self.root.after(0, dlg.close)
+                    return
+                except Exception as e:
+                    print(f"嵌入失败 {name}: {e}")
+                self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
+            self.root.after(0, dlg.close)
+            self.root.after(0, lambda: messagebox.showinfo("完成", f"盲水印嵌入完成\n成功 {success}/{total}"))
+        threading.Thread(target=worker, daemon=True).start()
 
     def extract_hidden(self):
         if not self.input_files or self.current_index == -1:
@@ -630,18 +665,17 @@ class PhotoWatermarkApp:
             messagebox.showerror("错误", "请输入密码")
             return
         path = self.input_files[self.current_index]
-        self.status_var.set("正在提取盲水印...")
+        dlg = ProgressDialog(self.root, "提取盲水印...")
+        dlg.set_text("正在提取...")
         def worker():
             try:
                 from blind_watermark import WaterMark
             except ImportError:
-                self.root.after(0, lambda: self.status_var.set("❌ 未安装 blind-watermark 库"))
+                self.root.after(0, dlg.close)
                 self.root.after(0, lambda: messagebox.showerror("错误", "请先安装 blind-watermark"))
                 return
-
             try:
                 bw = WaterMark(password_img=int(pwd), password_wm=int(pwd))
-                # 其余代码保持不变（读取图片、提取等）
                 from PIL import Image
                 import numpy as np
                 pil_img = Image.open(path).convert('RGB')
@@ -651,17 +685,16 @@ class PhotoWatermarkApp:
                     with open(len_path) as lf:
                         wm_shape = int(lf.read())
                 else:
-                    self.root.after(0, lambda: self.status_var.set("❌ 缺少水印长度信息"))
+                    self.root.after(0, dlg.close)
                     self.root.after(0, lambda: messagebox.showerror("错误", "找不到 .len 文件"))
                     return
                 wm_extract = bw.extract(embed_img=img_cv, wm_shape=wm_shape, mode='str')
-                self.root.after(0, lambda: self.status_var.set("✅ 提取成功"))
+                self.root.after(0, dlg.close)
                 self.root.after(0, lambda: messagebox.showinfo("提取结果",
                     f"图片: {os.path.basename(path)}\n密码: {pwd}\n\n提取内容:\n{wm_extract}"))
             except Exception as e:
-                self.root.after(0, lambda: self.status_var.set("❌ 提取失败"))
+                self.root.after(0, dlg.close)
                 self.root.after(0, lambda: messagebox.showerror("提取失败", f"密码错误或图片不含盲水印\n\n{str(e)}"))
-
         threading.Thread(target=worker, daemon=True).start()
     
 
