@@ -56,6 +56,10 @@ class PhotoWatermarkApp:
     def _init_ui(self):
         style = ttk.Style()
         style.configure(".", font=(GUI_CFG["font_family"], GUI_CFG["font_size"]))
+        style.configure("Treeview", rowheight=28, borderwidth=0)
+        style.layout("Treeview", [('Treeview.treearea', {'sticky': 'nswe'})])
+        style.configure("Treeview.Item", padding=(5, 2))
+        style.map("Treeview", background=[("selected", "#0078D7")])
         main_container = ttk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=1)
         main_pw = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
@@ -96,18 +100,33 @@ class PhotoWatermarkApp:
         ttk.Checkbutton(enable_frame, text="隐形水印", variable=self.enable_hidden, command=self.show_preview).pack(side="left", padx=3)
         list_frame = ttk.Frame(self.left_scroll_content)
         list_frame.pack(fill="both", expand=True, pady=5)
-        list_scrollbar = ttk.Scrollbar(list_frame)
-        list_scrollbar.pack(side="right", fill="y")
-        self.listbox = tk.Listbox(list_frame,
-                                  yscrollcommand=list_scrollbar.set,
-                                  selectmode=tk.SINGLE,
-                                  font=(GUI_CFG["font_family"], GUI_CFG["font_size"]),
-                                  bg="white",
-                                  selectbackground="#0078D4",
-                                  activestyle="none")
-        self.listbox.pack(side="left", fill="both", expand=True)
-        list_scrollbar.config(command=self.listbox.yview)
-        self.listbox.bind('<<ListboxSelect>>', self.on_list_select)
+        # 使用 Treeview 实现带复选框的列表（clam 主题下每行有分割线）
+        columns = ("checked", "filename")
+        self.file_tree = ttk.Treeview(list_frame, columns=columns, show="headings",
+                                      height=12, selectmode="browse")
+        self.file_tree.heading("checked", text="选择")
+        self.file_tree.heading("filename", text="文件名")
+        self.file_tree.column("checked", width=45, anchor="center")
+        self.file_tree.column("filename", width=300)
+        self.file_tree.pack(side="left", fill="both", expand=True)
+        # 点击复选框列切换勾选状态
+        def on_tree_click(event):
+            region = self.file_tree.identify_region(event.x, event.y)
+            if region == "cell":
+                col = self.file_tree.identify_column(event.x)
+                if col == "#1":
+                    item = self.file_tree.identify_row(event.y)
+                    if item:
+                        current = self.file_tree.set(item, "checked")
+                        new_val = "☐" if current == "☑" else "☑"
+                        self.file_tree.set(item, "checked", new_val)
+        self.file_tree.bind("<ButtonRelease-1>", on_tree_click)
+        # 双击行切换预览
+        self.file_tree.bind("<<TreeviewSelect>>", self.on_tree_select)
+        # 滚动条
+        tree_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.file_tree.yview)
+        tree_scrollbar.pack(side="right", fill="y")
+        self.file_tree.configure(yscrollcommand=tree_scrollbar.set)
         panel_border = CollapsiblePanel(self.left_scroll_content, "添加边框", expanded=False)
         panel_border.pack(fill="x", pady=3)
         param_frame = ttk.LabelFrame(panel_border.content, text="✏️ 水印参数")
@@ -175,8 +194,6 @@ class PhotoWatermarkApp:
         mode_frame.grid(row=3, column=0, columnspan=2, pady=3)
         ttk.Radiobutton(mode_frame, text="嵌入", variable=self.hidden_mode, value="embed", command=self._toggle_hidden_mode).pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(mode_frame, text="提取", variable=self.hidden_mode, value="extract", command=self._toggle_hidden_mode).pack(side=tk.LEFT, padx=5)
-        self.hidden_btn = ttk.Button(hidden_frame, text="添加隐形水印", command=self.embed_hidden_selected)
-        self.hidden_btn.grid(row=4, column=0, columnspan=2, pady=3)
         self.hidden_hint = ttk.Label(hidden_frame, text="💡 启用隐形水印开关后，处理将自动嵌入", foreground="gray")
         self.hidden_hint.grid(row=5, column=0, columnspan=2, pady=(10,0))
         right_frame = ttk.Frame(main_pw)
@@ -238,9 +255,6 @@ class PhotoWatermarkApp:
         if self.current_index > 0:
             self._save_current_edits()
             self.current_index -= 1
-            self.listbox.selection_clear(0, tk.END)
-            self.listbox.selection_set(self.current_index)
-            self.listbox.see(self.current_index)
             self._update_preview_for_current()
     def next_image(self):
         if not self.input_files:
@@ -248,9 +262,6 @@ class PhotoWatermarkApp:
         if self.current_index < len(self.input_files) - 1:
             self._save_current_edits()
             self.current_index += 1
-            self.listbox.selection_clear(0, tk.END)
-            self.listbox.selection_set(self.current_index)
-            self.listbox.see(self.current_index)
             self._update_preview_for_current()
     def select_files(self):
         files = filedialog.askopenfilenames(
@@ -268,50 +279,39 @@ class PhotoWatermarkApp:
         for f in files:
             if f not in self.input_files:
                 self.input_files.append(f)
-                self.listbox.insert(tk.END, os.path.basename(f))
+                self.file_tree.insert("", tk.END, values=("☑", os.path.basename(f)))
                 added += 1
         if added > 0:
             self.status_var.set(f"已添加 {added} 张照片，共 {len(self.input_files)} 张")
             if self.current_index == -1:
-                self.listbox.selection_set(0)
                 self.current_index = 0
                 self._update_preview_for_current()
             # 后台生成所有图片的缩略图缓存
             threading.Thread(target=self._precache_all_thumbnails, daemon=True).start()
     def delete_selected(self):
-        sel = self.listbox.curselection()
-        if not sel:
-            messagebox.showinfo("提示", "请先选择要删除的照片")
+        # 获取所有勾选的行
+        checked_items = []
+        for item in self.file_tree.get_children():
+            if self.file_tree.set(item, "checked") == "☑":
+                idx = self.file_tree.index(item)
+                checked_items.append(idx)
+        if not checked_items:
+            messagebox.showinfo("提示", "请先勾选要删除的照片（点击复选框列）")
             return
-        idx = sel[0]
-        filename = os.path.basename(self.input_files[idx])
-        if messagebox.askyesno("确认删除", f"确定要删除 {filename} 吗？"):
-            self.listbox.delete(idx)
+        count = len(checked_items)
+        if count == 1:
+            filename = os.path.basename(self.input_files[checked_items[0]])
+            if not messagebox.askyesno("确认删除", f"确定要删除 {filename} 吗？"):
+                return
+        else:
+            if not messagebox.askyesno("确认删除", f"确定要删除勾选的 {count} 张照片吗？"):
+                return
+        # 从后往前删除，避免索引变化
+        for idx in reversed(checked_items):
+            self.file_tree.delete(self.file_tree.get_children()[idx])
             del self.input_files[idx]
-            if not self.input_files:
-                self.current_index = -1
-                self.canvas.delete("all")
-                self.status_var.set("列表已清空")
-                self.brand_var.set("")
-                self.camera_var.set("")
-                self.lens_var.set("")
-                self.photo_name_var.set("")
-                self.focal_var.set("")
-                self.f_var.set("")
-                self.exp_var.set("")
-                self.iso_var.set("")
-                self.time_var.set("")
-                self.loc_var.set("")
-            else:
-                if self.current_index >= len(self.input_files):
-                    self.current_index = len(self.input_files) - 1
-                self.listbox.selection_set(self.current_index)
-                self._update_preview_for_current()
-    def clear_all(self):
-        if self.input_files and messagebox.askyesno("确认清空", "确定要清空所有照片吗？"):
-            self.input_files = []
+        if not self.input_files:
             self.current_index = -1
-            self.listbox.delete(0, tk.END)
             self.canvas.delete("all")
             self.status_var.set("列表已清空")
             self.brand_var.set("")
@@ -324,15 +324,36 @@ class PhotoWatermarkApp:
             self.iso_var.set("")
             self.time_var.set("")
             self.loc_var.set("")
-    def on_list_select(self, event):
-        sel = self.listbox.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        if idx != self.current_index:
-            self._save_current_edits()
-            self.current_index = idx
+        else:
+            if self.current_index >= len(self.input_files):
+                self.current_index = len(self.input_files) - 1
             self._update_preview_for_current()
+    def clear_all(self):
+        if self.input_files and messagebox.askyesno("确认清空", "确定要清空所有照片吗？"):
+            self.input_files = []
+            self.current_index = -1
+            for item in self.file_tree.get_children():
+                self.file_tree.delete(item)
+            self.canvas.delete("all")
+            self.status_var.set("列表已清空")
+            self.brand_var.set("")
+            self.camera_var.set("")
+            self.lens_var.set("")
+            self.photo_name_var.set("")
+            self.focal_var.set("")
+            self.f_var.set("")
+            self.exp_var.set("")
+            self.iso_var.set("")
+            self.time_var.set("")
+            self.loc_var.set("")
+    def on_tree_select(self, event):
+        sel = self.file_tree.selection()
+        if sel:
+            idx = self.file_tree.index(sel[0])
+            if idx != self.current_index:
+                self._save_current_edits()
+                self.current_index = idx
+                self._update_preview_for_current()
     def _update_preview_for_current(self):
         if self.current_index < 0 or self.current_index >= len(self.input_files):
             return
@@ -534,61 +555,87 @@ class PhotoWatermarkApp:
             return
         if not messagebox.askyesno("确认处理", f"将处理 {len(self.input_files)} 张照片，是否继续？"):
             return
+        # 检查是否有任何功能启用
+        has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
+        if not has_any_func:
+            messagebox.showwarning("提示", "请至少勾选一项功能（添加边框、明文水印、隐形水印）")
+            return
+                # 获取所有勾选的图片
+        checked_indices = []
+        for item in self.file_tree.get_children():
+            if self.file_tree.set(item, "checked") == "☑":
+                checked_indices.append(self.file_tree.index(item))
+        if not checked_indices:
+            messagebox.showwarning("提示", "请先勾选要处理的图片（点击复选框列）")
+            return
+        checked_files = [self.input_files[i] for i in checked_indices]
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
-        total = len(self.input_files)
+        total = len(checked_files)
         self.progress["maximum"] = total
         dlg = ProgressDialog(self.root, "处理...")
         dlg.set_text(f"正在处理 0/{total}")
+        
         def worker():
             success = 0
-            for i, f in enumerate(self.input_files):
+            is_extract = self.hidden_mode.get() == "extract" and self.enable_hidden.get()
+            for i, f in enumerate(checked_files):
                 name = os.path.basename(f)
                 out = os.path.join(self.output_path.get(), f"Watermark_{name}")
                 try:
-                    info = ExifReader.get_exif_full(f)
-                    data = {
-                        "brand": info.get("make", ""),
-                        "camera": info.get("camera_model", ""),
-                        "lens": info.get("lens_model", ""),
-                        "photo_name": "",
-                        "focal": info.get("focal", ""),
-                        "f": info.get("f", ""),
-                        "exp": info.get("exposure", ""),
-                        "iso": info.get("iso", ""),
-                        "datetime": info.get("datetime", ""),
-                        "location": ""
-                    }
-                    if self.enable_border.get():
-                        WatermarkGenerator.add_watermark(f, out, data, font)
+                    if is_extract:
+                        # 提取模式：直接从原图提取，不生成输出文件
+                        pwd = self.hidden_pwd.get().strip()
+                        pwd_int = int(pwd)
+                        bw = DWTWatermark(password=pwd_int)
+                        extracted = bw.extract(f)
+                        result_text = f"隐形水印提取 {name}: {extracted}"
+                        print(result_text)
+                        self.root.after(0, lambda r=result_text: messagebox.showinfo("提取结果", r))
                     else:
-                        shutil.copy2(f, out)
-                    if self.enable_watermark.get() and self.simple_watermark_panel:
-                        wm = self.simple_watermark_panel
-                        if wm.watermark_text.get().strip():
-                            img = Image.open(out).convert("RGBA")
-                            wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get())
-                            color = wm.color_map[wm.font_color_var.get()]
-                            wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
-                            img.convert("RGB").save(out, quality=95)
-                            # 恢复 EXIF
+                        info = ExifReader.get_exif_full(f)
+                        data = {
+                            "brand": info.get("make", ""),
+                            "camera": info.get("camera_model", ""),
+                            "lens": info.get("lens_model", ""),
+                            "photo_name": "",
+                            "focal": info.get("focal", ""),
+                            "f": info.get("f", ""),
+                            "exp": info.get("exposure", ""),
+                            "iso": info.get("iso", ""),
+                            "datetime": info.get("datetime", ""),
+                            "location": ""
+                        }
+                        if self.enable_border.get():
+                            WatermarkGenerator.add_watermark(f, out, data, font)
+                        else:
+                            shutil.copy2(f, out)
+                        if self.enable_watermark.get() and self.simple_watermark_panel:
+                            wm = self.simple_watermark_panel
+                            if wm.watermark_text.get().strip():
+                                img = Image.open(out).convert("RGBA")
+                                wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get())
+                                color = wm.color_map[wm.font_color_var.get()]
+                                wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
+                                img.convert("RGB").save(out, quality=95)
+                                # 恢复 EXIF
+                                try:
+                                    exif_dict = piexif.load(f)
+                                    exif_bytes = piexif.dump(exif_dict)
+                                    piexif.insert(exif_bytes, out)
+                                except:
+                                    pass
+                        # 隐形水印嵌入
+                        if self.enable_hidden.get():
                             try:
-                                exif_dict = piexif.load(f)
-                                exif_bytes = piexif.dump(exif_dict)
-                                piexif.insert(exif_bytes, out)
-                            except:
-                                pass
-                    # 自动嵌入隐形水印
-                    if self.enable_hidden.get():
-                        try:
-                            pwd = self.hidden_pwd.get().strip()
-                            text = self.hidden_text.get().strip()
-                            if pwd and text:
+                                pwd = self.hidden_pwd.get().strip()
                                 pwd_int = int(pwd)
                                 bw = DWTWatermark(password=pwd_int)
-                                bw.embed(out, text, out)
-                        except Exception as e:
-                            print(f"隐形水印嵌入失败 {name}: {e}")
+                                text = self.hidden_text.get().strip()
+                                if pwd and text:
+                                    bw.embed(out, text, out)
+                            except Exception as e:
+                                print(f"隐形水印嵌入失败 {name}: {e}")
                     success += 1
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
@@ -598,7 +645,8 @@ class PhotoWatermarkApp:
             self.progress["value"] = 0
             self.root.after(0, dlg.close)
             self.status_var.set(f"完成！成功 {success}/{total}")
-            self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
+            if not is_extract:
+                self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
         threading.Thread(target=worker, daemon=True).start()
     
     def _toggle_hidden_mode(self):
@@ -607,140 +655,16 @@ class PhotoWatermarkApp:
             self.hidden_text_entry.grid()
             self.hidden_pwd_label.grid()
             self.hidden_pwd_entry.grid()
-            self.hidden_btn.config(text="添加隐形水印", command=self.embed_hidden_selected)
-            self.hidden_hint.config(text="💡 添加模式：向选中图片中添加隐形水印")
+            self.hidden_hint.config(text="💡 启用隐形水印开关后，处理将自动嵌入")
         else:
             self.hidden_text_label.grid_remove()
             self.hidden_text_entry.grid_remove()
             self.hidden_pwd_label.grid_remove()
             self.hidden_pwd_entry.grid_remove()
-            self.hidden_btn.config(text="提取隐形水印", command=self.batch_extract_hidden)
-            self.hidden_hint.config(text="💡 提取模式：从本机处理过的图片中提取隐形水印")
-
-    def embed_hidden_selected(self):
-        if not self.input_files or self.current_index == -1:
-            messagebox.showwarning("提示", "请先选择照片")
-            return
-        pwd = self.hidden_pwd.get().strip()
-        text = self.hidden_text.get().strip()
-        if not pwd or not text:
-            messagebox.showerror("错误", "密码和加密内容不能为空")
-            return
-        try:
-            pwd_int = int(pwd)
-        except ValueError:
-            messagebox.showerror("错误", "密码必须为数字")
-            return
-        path = self.input_files[self.current_index]
-        name = os.path.basename(path)
-        out = os.path.join(self.output_path.get(), f"Hidden_{name}")
-        dlg = ProgressDialog(self.root, "嵌入隐形水印...")
-        dlg.set_text(f"正在处理: {name}")
-        try:
-            bw = DWTWatermark(password=pwd_int)
-            bw.embed(path, text, out)
-            dlg.close()
-            messagebox.showinfo("完成", f"隐形水印已嵌入\n保存到: {out}")
-        except Exception as e:
-            dlg.close()
-            messagebox.showerror("嵌入失败", str(e))
-
-    def extract_hidden_selected(self):
-        if not self.input_files or self.current_index == -1:
-            messagebox.showwarning("提示", "请先选择照片")
-            return
-        pwd = self.hidden_pwd.get().strip()
-        if not pwd:
-            messagebox.showerror("错误", "密码不能为空")
-            return
-        try:
-            pwd_int = int(pwd)
-        except ValueError:
-            messagebox.showerror("错误", "密码必须为数字")
-            return
-        path = self.input_files[self.current_index]
-        name = os.path.basename(path)
-        try:
-            bw = DWTWatermark(password=pwd_int)
-            extracted = bw.extract(path)
-            messagebox.showinfo("提取结果", f"图片: {name}\n\n提取内容: {extracted}")
-        except FileNotFoundError:
-            messagebox.showerror("错误", "未找到 .len 文件，该图片可能未嵌入隐形水印")
-        except Exception as e:
-            messagebox.showerror("提取失败", f"提取隐形水印失败: {str(e)}")
-
-    def batch_extract_hidden(self):
-        if not self.input_files:
-            messagebox.showwarning("提示", "请先添加照片")
-            return
-        pwd = self.hidden_pwd.get().strip()
-        if not pwd:
-            messagebox.showerror("错误", "密码不能为空")
-            return
-        try:
-            pwd_int = int(pwd)
-        except ValueError:
-            messagebox.showerror("错误", "密码必须为数字")
-            return
-        total = len(self.input_files)
-        dlg = ProgressDialog(self.root, "提取隐形水印...")
-        dlg.set_text(f"正在提取 0/{total}")
-        results = []
-        def worker():
-            for i, f in enumerate(self.input_files):
-                name = os.path.basename(f)
-                try:
-                    bw = DWTWatermark(password=pwd_int)
-                    extracted = bw.extract(f)
-                    results.append(f"{name}: {extracted}")
-                except FileNotFoundError:
-                    results.append(f"{name}: 未找到 .len 文件")
-                except Exception as e:
-                    results.append(f"{name}: 提取失败 - {e}")
-                self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在提取 {v}"))
-            self.root.after(0, dlg.close)
-            msg = "\n".join(results)
-            self.root.after(0, lambda: messagebox.showinfo("提取结果", msg))
-        threading.Thread(target=worker, daemon=True).start()
-
-    def batch_embed_hidden(self):
-        if not self.input_files:
-            messagebox.showwarning("提示", "请先添加照片")
-            return
-        pwd = self.hidden_pwd.get().strip()
-        text = self.hidden_text.get().strip()
-        if not pwd or not text:
-            messagebox.showerror("错误", "密码和加密内容不能为空")
-            return
-        try:
-            pwd_int = int(pwd)
-        except ValueError:
-            messagebox.showerror("错误", "密码必须为数字")
-            return
-        total = len(self.input_files)
-        output_dir = self.output_path.get()
-        os.makedirs(output_dir, exist_ok=True)
-        dlg = ProgressDialog(self.root, "嵌入隐形水印...")
-        dlg.set_text(f"正在处理 0/{total}")
-        def worker():
-            success = 0
-            for i, f in enumerate(self.input_files):
-                name = os.path.basename(f)
-                out = os.path.join(output_dir, f"Hidden_{name}")
-                try:
-                    bw = DWTWatermark(password=pwd_int)
-                    bw.embed(f, text, out)
-                    success += 1
-                except Exception as e:
-                    err_msg = f"嵌入失败 {name}: {e}"
-                    print(err_msg)
-                    self.root.after(0, lambda m=err_msg: messagebox.showerror("嵌入失败", m))
-                    self.root.after(0, dlg.close)
-                    return
-                self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
-            self.root.after(0, dlg.close)
-            self.root.after(0, lambda: messagebox.showinfo("完成", f"隐形水印嵌入完成\n成功 {success}/{total}"))
-        threading.Thread(target=worker, daemon=True).start()
+            self.hidden_hint.config(text="💡 启用隐形水印开关后，处理将自动提取")
+            # 提取模式下自动取消边框和明文水印的勾选
+            self.enable_border.set(False)
+            self.enable_watermark.set(False)
 
         
 
