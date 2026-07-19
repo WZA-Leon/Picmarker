@@ -16,12 +16,13 @@ from config import GUI_CFG, CAMERA_DB
 from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel
 from ui_watermark import WatermarkApp
 from progress_util import ProgressDialog
-
+from hidden_watermark import DWTWatermark
+import piexif
 
 class PhotoWatermarkApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Picmarker V1.3 - 批量图片水印工具")
+        self.root.title("Picmarker V1.3 - 图片水印工具")
         self.root.geometry(GUI_CFG.get("window_size", "1200x900"))
         self.root.minsize(1000, 700)
         self.root.iconbitmap('icons/icon.ico')
@@ -155,19 +156,29 @@ class PhotoWatermarkApp:
         # 隐形水印面板
         panel_hidden = CollapsiblePanel(self.left_scroll_content, "隐形水印", expanded=False)
         panel_hidden.pack(fill="x", pady=3)
-        hidden_frame = ttk.LabelFrame(panel_hidden.content, text="盲水印设置", padding="5")
+        hidden_frame = ttk.LabelFrame(panel_hidden.content, text="隐形水印设置", padding="5")
         hidden_frame.pack(fill="x", pady=2)
-        ttk.Label(hidden_frame, text="密码:").grid(row=0, column=0, sticky=tk.W)
-        self.hidden_pwd = tk.StringVar(value="123456")
-        ttk.Entry(hidden_frame, textvariable=self.hidden_pwd, width=20, show="*").grid(row=0, column=1, padx=5)
-        ttk.Label(hidden_frame, text="加密内容:").grid(row=1, column=0, sticky=tk.W, pady=(5,0))
+        self.hidden_pwd_label = ttk.Label(hidden_frame, text="密码:")
+        self.hidden_pwd_label.grid(row=0, column=0, sticky=tk.W)
+        self.hidden_pwd = tk.StringVar(value="123456")#默认密码是123456
+        self.hidden_pwd_entry = ttk.Entry(hidden_frame, textvariable=self.hidden_pwd, width=20, show="•")
+        self.hidden_pwd_entry.grid(row=0, column=1, padx=5)
+        self.hidden_text_label = ttk.Label(hidden_frame, text="加密内容:")
+        self.hidden_text_label.grid(row=1, column=0, sticky=tk.W, pady=(5,0))
         self.hidden_text = tk.StringVar(value="版权信息")
-        ttk.Entry(hidden_frame, textvariable=self.hidden_text, width=20).grid(row=1, column=1, padx=5, pady=(5,0))
-        ttk.Label(hidden_frame, text="⚠ 处理速度较慢，请耐心等待", foreground="orange").grid(row=2, column=0, columnspan=2, pady=5)
-        btn_hidden = ttk.Button(hidden_frame, text="批量嵌入盲水印", command=self.batch_embed_hidden)
-        btn_hidden.grid(row=3, column=0, columnspan=2, pady=3)
-        ttk.Label(hidden_frame, text="💡 提取盲水印请使用命令行工具:", foreground="gray").grid(row=4, column=0, columnspan=2, pady=(10,0))
-        ttk.Label(hidden_frame, text="python extract_blind.py <图片路径>", foreground="#0078D4").grid(row=5, column=0, columnspan=2, pady=3)
+        self.hidden_text_entry = ttk.Entry(hidden_frame, textvariable=self.hidden_text, width=20)
+        self.hidden_text_entry.grid(row=1, column=1, padx=5, pady=(5,0))
+        ttk.Label(hidden_frame, text="⚠ 处理速度较慢，请耐心等待", foreground="red", font=("Arial", 16, "bold")).grid(row=2, column=0, columnspan=2, pady=5)
+        # 嵌入/提取模式选择
+        self.hidden_mode = tk.StringVar(value="embed")
+        mode_frame = ttk.Frame(hidden_frame)
+        mode_frame.grid(row=3, column=0, columnspan=2, pady=3)
+        ttk.Radiobutton(mode_frame, text="嵌入", variable=self.hidden_mode, value="embed", command=self._toggle_hidden_mode).pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(mode_frame, text="提取", variable=self.hidden_mode, value="extract", command=self._toggle_hidden_mode).pack(side=tk.LEFT, padx=5)
+        self.hidden_btn = ttk.Button(hidden_frame, text="添加隐形水印", command=self.embed_hidden_selected)
+        self.hidden_btn.grid(row=4, column=0, columnspan=2, pady=3)
+        self.hidden_hint = ttk.Label(hidden_frame, text="💡 启用隐形水印开关后，处理将自动嵌入", foreground="gray")
+        self.hidden_hint.grid(row=5, column=0, columnspan=2, pady=(10,0))
         right_frame = ttk.Frame(main_pw)
         main_pw.add(right_frame, weight=1)
         path_frame = ttk.LabelFrame(right_frame, text="💾 输出设置")
@@ -190,9 +201,7 @@ class PhotoWatermarkApp:
         action_frame = ttk.Frame(right_frame)
         action_frame.pack(fill=tk.X, pady=6)
         ttk.Button(action_frame, text="🔄 刷新预览", command=self.show_preview).pack(side=tk.LEFT, padx=2)
-        ttk.Button(action_frame, text="🎨 添加水印(当前)", command=self.add_watermark_current).pack(side=tk.LEFT, padx=2)
-        ttk.Button(action_frame, text="⚙ 设置编辑器", command=self.open_settings_editor).pack(side=tk.LEFT, padx=2)
-        ttk.Button(action_frame, text="📦 批量处理(全部)", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(action_frame, text="📦 处理照片", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
         self.progress = ttk.Progressbar(right_frame, orient=tk.HORIZONTAL)
         self.progress.pack(fill=tk.X, pady=(0, 3))
         self.status_var = tk.StringVar(value="就绪")
@@ -519,47 +528,17 @@ class PhotoWatermarkApp:
             if 'dlg' in dir():
                 dlg.close()
             self.status_var.set(f"预览失败: {str(e)}")
-    def add_watermark_current(self):
-        if not self.input_files or self.current_index == -1:
-            messagebox.showwarning("提示", "请先选择照片")
-            return
-        os.makedirs(self.output_path.get(), exist_ok=True)
-        path = self.input_files[self.current_index]
-        name = os.path.basename(path)
-        out = os.path.join(self.output_path.get(), f"Watermark_{name}")
-        dlg = ProgressDialog(self.root, "处理中...")
-        dlg.set_text(f"正在添加水印: {name}")
-        try:
-            if self.enable_border.get():
-                WatermarkGenerator.add_watermark(path, out, self.get_data(), self.selected_font.get())
-            else:
-                shutil.copy2(path, out)
-            # 应用明文水印
-            if self.enable_watermark.get() and self.simple_watermark_panel:
-                wm = self.simple_watermark_panel
-                if wm.watermark_text.get().strip():
-                    img = Image.open(out).convert("RGBA")
-                    wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get())
-                    color = wm.color_map[wm.font_color_var.get()]
-                    wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
-                    img.convert("RGB").save(out, quality=95)
-            dlg.close()
-            self.status_var.set(f"已完成: {name}")
-            messagebox.showinfo("完成", f"水印已保存到:\n{out}")
-        except Exception as e:
-            dlg.close()
-            messagebox.showerror("错误", f"处理失败: {str(e)}")
     def start_batch(self):
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
             return
-        if not messagebox.askyesno("确认批量处理", f"将处理 {len(self.input_files)} 张照片，是否继续？"):
+        if not messagebox.askyesno("确认处理", f"将处理 {len(self.input_files)} 张照片，是否继续？"):
             return
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
         total = len(self.input_files)
         self.progress["maximum"] = total
-        dlg = ProgressDialog(self.root, "批量处理...")
+        dlg = ProgressDialog(self.root, "处理...")
         dlg.set_text(f"正在处理 0/{total}")
         def worker():
             success = 0
@@ -592,6 +571,24 @@ class PhotoWatermarkApp:
                             color = wm.color_map[wm.font_color_var.get()]
                             wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
                             img.convert("RGB").save(out, quality=95)
+                            # 恢复 EXIF
+                            try:
+                                exif_dict = piexif.load(f)
+                                exif_bytes = piexif.dump(exif_dict)
+                                piexif.insert(exif_bytes, out)
+                            except:
+                                pass
+                    # 自动嵌入隐形水印
+                    if self.enable_hidden.get():
+                        try:
+                            pwd = self.hidden_pwd.get().strip()
+                            text = self.hidden_text.get().strip()
+                            if pwd and text:
+                                pwd_int = int(pwd)
+                                bw = DWTWatermark(password=pwd_int)
+                                bw.embed(out, text, out)
+                        except Exception as e:
+                            print(f"隐形水印嵌入失败 {name}: {e}")
                     success += 1
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
@@ -601,22 +598,111 @@ class PhotoWatermarkApp:
             self.progress["value"] = 0
             self.root.after(0, dlg.close)
             self.status_var.set(f"完成！成功 {success}/{total}")
-            self.root.after(0, lambda: messagebox.showinfo("批量处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
+            self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
         threading.Thread(target=worker, daemon=True).start()
-    def open_settings_editor(self):
-        
-        import subprocess
-        editor_path = Path(__file__).parent / "edit.py"
-        if editor_path.exists():
-            subprocess.Popen(["python", str(editor_path)])
-
-
-
-            
-        else:
-            messagebox.showerror("错误", f"未找到 {editor_path}")
-            return
     
+    def _toggle_hidden_mode(self):
+        if self.hidden_mode.get() == "embed":
+            self.hidden_text_label.grid()
+            self.hidden_text_entry.grid()
+            self.hidden_pwd_label.grid()
+            self.hidden_pwd_entry.grid()
+            self.hidden_btn.config(text="添加隐形水印", command=self.embed_hidden_selected)
+            self.hidden_hint.config(text="💡 添加模式：向选中图片中添加隐形水印")
+        else:
+            self.hidden_text_label.grid_remove()
+            self.hidden_text_entry.grid_remove()
+            self.hidden_pwd_label.grid_remove()
+            self.hidden_pwd_entry.grid_remove()
+            self.hidden_btn.config(text="提取隐形水印", command=self.batch_extract_hidden)
+            self.hidden_hint.config(text="💡 提取模式：从本机处理过的图片中提取隐形水印")
+
+    def embed_hidden_selected(self):
+        if not self.input_files or self.current_index == -1:
+            messagebox.showwarning("提示", "请先选择照片")
+            return
+        pwd = self.hidden_pwd.get().strip()
+        text = self.hidden_text.get().strip()
+        if not pwd or not text:
+            messagebox.showerror("错误", "密码和加密内容不能为空")
+            return
+        try:
+            pwd_int = int(pwd)
+        except ValueError:
+            messagebox.showerror("错误", "密码必须为数字")
+            return
+        path = self.input_files[self.current_index]
+        name = os.path.basename(path)
+        out = os.path.join(self.output_path.get(), f"Hidden_{name}")
+        dlg = ProgressDialog(self.root, "嵌入隐形水印...")
+        dlg.set_text(f"正在处理: {name}")
+        try:
+            bw = DWTWatermark(password=pwd_int)
+            bw.embed(path, text, out)
+            dlg.close()
+            messagebox.showinfo("完成", f"隐形水印已嵌入\n保存到: {out}")
+        except Exception as e:
+            dlg.close()
+            messagebox.showerror("嵌入失败", str(e))
+
+    def extract_hidden_selected(self):
+        if not self.input_files or self.current_index == -1:
+            messagebox.showwarning("提示", "请先选择照片")
+            return
+        pwd = self.hidden_pwd.get().strip()
+        if not pwd:
+            messagebox.showerror("错误", "密码不能为空")
+            return
+        try:
+            pwd_int = int(pwd)
+        except ValueError:
+            messagebox.showerror("错误", "密码必须为数字")
+            return
+        path = self.input_files[self.current_index]
+        name = os.path.basename(path)
+        try:
+            bw = DWTWatermark(password=pwd_int)
+            extracted = bw.extract(path)
+            messagebox.showinfo("提取结果", f"图片: {name}\n\n提取内容: {extracted}")
+        except FileNotFoundError:
+            messagebox.showerror("错误", "未找到 .len 文件，该图片可能未嵌入隐形水印")
+        except Exception as e:
+            messagebox.showerror("提取失败", f"提取隐形水印失败: {str(e)}")
+
+    def batch_extract_hidden(self):
+        if not self.input_files:
+            messagebox.showwarning("提示", "请先添加照片")
+            return
+        pwd = self.hidden_pwd.get().strip()
+        if not pwd:
+            messagebox.showerror("错误", "密码不能为空")
+            return
+        try:
+            pwd_int = int(pwd)
+        except ValueError:
+            messagebox.showerror("错误", "密码必须为数字")
+            return
+        total = len(self.input_files)
+        dlg = ProgressDialog(self.root, "提取隐形水印...")
+        dlg.set_text(f"正在提取 0/{total}")
+        results = []
+        def worker():
+            for i, f in enumerate(self.input_files):
+                name = os.path.basename(f)
+                try:
+                    bw = DWTWatermark(password=pwd_int)
+                    extracted = bw.extract(f)
+                    results.append(f"{name}: {extracted}")
+                except FileNotFoundError:
+                    results.append(f"{name}: 未找到 .len 文件")
+                except Exception as e:
+                    results.append(f"{name}: 提取失败 - {e}")
+                self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在提取 {v}"))
+            self.root.after(0, dlg.close)
+            msg = "\n".join(results)
+            self.root.after(0, lambda: messagebox.showinfo("提取结果", msg))
+        threading.Thread(target=worker, daemon=True).start()
+
     def batch_embed_hidden(self):
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
@@ -626,10 +712,15 @@ class PhotoWatermarkApp:
         if not pwd or not text:
             messagebox.showerror("错误", "密码和加密内容不能为空")
             return
+        try:
+            pwd_int = int(pwd)
+        except ValueError:
+            messagebox.showerror("错误", "密码必须为数字")
+            return
         total = len(self.input_files)
         output_dir = self.output_path.get()
         os.makedirs(output_dir, exist_ok=True)
-        dlg = ProgressDialog(self.root, "嵌入盲水印...")
+        dlg = ProgressDialog(self.root, "嵌入隐形水印...")
         dlg.set_text(f"正在处理 0/{total}")
         def worker():
             success = 0
@@ -637,22 +728,18 @@ class PhotoWatermarkApp:
                 name = os.path.basename(f)
                 out = os.path.join(output_dir, f"Hidden_{name}")
                 try:
-                    from blind_watermark import WaterMark
-                    bw = WaterMark(password_img=int(pwd), password_wm=int(pwd))
-                    bw.read_img(f).read_wm(text, mode='str').embed(out)
-                    len_path = out + '.len'
-                    with open(len_path, 'w') as lf:
-                        lf.write(str(len(text)))
+                    bw = DWTWatermark(password=pwd_int)
+                    bw.embed(f, text, out)
                     success += 1
-                except ImportError:
-                    self.root.after(0, lambda: messagebox.showerror("错误", "请先安装 blind-watermark"))
+                except Exception as e:
+                    err_msg = f"嵌入失败 {name}: {e}"
+                    print(err_msg)
+                    self.root.after(0, lambda m=err_msg: messagebox.showerror("嵌入失败", m))
                     self.root.after(0, dlg.close)
                     return
-                except Exception as e:
-                    print(f"嵌入失败 {name}: {e}")
                 self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
             self.root.after(0, dlg.close)
-            self.root.after(0, lambda: messagebox.showinfo("完成", f"盲水印嵌入完成\n成功 {success}/{total}"))
+            self.root.after(0, lambda: messagebox.showinfo("完成", f"隐形水印嵌入完成\n成功 {success}/{total}"))
         threading.Thread(target=worker, daemon=True).start()
 
         
