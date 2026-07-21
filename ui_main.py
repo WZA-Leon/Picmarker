@@ -70,25 +70,35 @@ class PhotoWatermarkApp:
         self.left_canvas = tk.Canvas(left_frame, highlightthickness=0)
         self.left_scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.left_canvas.yview)
         self.left_scroll_content = ttk.Frame(self.left_canvas)
-        self.left_scroll_content.bind("<Configure>", self.update_left_scroll_region)
+        
         self.left_canvas.create_window((0, 0), window=self.left_scroll_content, anchor="nw", width=350, tags="inner")
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
         self.left_canvas.pack(side="left", fill="both", expand=True)
         self.left_scrollbar.pack(side="right", fill="y")
-                # 绑定鼠标滚轮滚动 - 全局拦截，仅当鼠标在 left_frame 内时滚动 Canvas
+        # 绑定鼠标滚轮滚动 - 仅当鼠标在 left_frame 内且不在子滚动区域时滚动 Canvas
+        outer_self = self  # 捕获外部实例引用
         def on_mousewheel(event):
+            # 如果在 checklist 子滚动区域，不处理
+            w = event.widget
+            while w:
+                if w is outer_self.checklist_canvas or w is outer_self.checklist_inner:
+                    return
+                w = w.master
+            # 否则检查是否在 left_frame 内
             widget = event.widget
             while widget:
-                if widget == left_frame:
-                    self.left_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                if widget == outer_self.left_frame:
+                    # 按像素滚动，每次移动 40 像素
+                    outer_self.left_canvas.yview_scroll(int(-1 * event.delta / 120) * 40, "pixels")
                     return "break"
                 widget = widget.master
         self.root.bind_all("<MouseWheel>", on_mousewheel)
         btn_frame = ttk.Frame(self.left_scroll_content)
         btn_frame.pack(fill="x", pady=5)
-        ttk.Button(btn_frame, text="➕ 添加图片", command=self.select_files).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="🗑 删除选中", command=self.delete_selected).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="✅ 全选", command=self.select_all).pack(side="left", padx=2)
+        ttk.Button(btn_frame, text="添加", width=4, command=self.select_files).pack(side="left", padx=2)
+        ttk.Button(btn_frame, text="删除", width=4, command=self.delete_selected).pack(side="left", padx=2)
+        ttk.Button(btn_frame, text="全选", width=4, command=self.select_all).pack(side="left", padx=2)
+        ttk.Button(btn_frame, text="全不选", width=5, command=self.deselect_all).pack(side="left", padx=2)
         # 功能启用/禁用开关
         enable_frame = ttk.LabelFrame(self.left_scroll_content, text="功能开关", padding="3")
         enable_frame.pack(fill="x", pady=3)
@@ -98,40 +108,35 @@ class PhotoWatermarkApp:
         ttk.Checkbutton(enable_frame, text="添加边框", variable=self.enable_border, command=self.show_preview).pack(side="left", padx=3)
         ttk.Checkbutton(enable_frame, text="明文水印", variable=self.enable_watermark, command=self.show_preview).pack(side="left", padx=3)
         ttk.Checkbutton(enable_frame, text="隐形水印", variable=self.enable_hidden, command=self.show_preview).pack(side="left", padx=3)
-        list_frame = ttk.Frame(self.left_scroll_content)
-        list_frame.pack(fill="both", expand=True, pady=5)
-        # 使用 Treeview 实现带复选框的列表（clam 主题下每行有分割线）
-        columns = ("checked", "filename")
-        self.file_tree = ttk.Treeview(list_frame, columns=columns, show="headings",
-                                      height=12, selectmode="browse")
-        # 禁用列拖动
-        self.file_tree.bind("<Button-1>", lambda e: "break" if self.file_tree.identify_region(e.x, e.y) == "separator" else None, add="+")
-        self.file_tree.heading("checked", text="选择")
-        self.file_tree.heading("filename", text="文件名")
-        self.file_tree.column("checked", width=45, anchor="center", stretch=False, minwidth=45)
-        self.file_tree.column("filename", width=290, anchor="center", stretch=False, minwidth=290)
-        self.file_tree.pack(side="left", fill="both", expand=True)
-        # 点击复选框列切换勾选状态（不触发预览）
-        def on_tree_click(event):
-            region = self.file_tree.identify_region(event.x, event.y)
-            col = self.file_tree.identify_column(event.x)
-            if region == "cell" and col == "#1":
-                item = self.file_tree.identify_row(event.y)
-                if item:
-                    current = self.file_tree.set(item, "checked")
-                    new_val = "🔲" if current == "☑️" else "☑️"
-                    self.file_tree.set(item, "checked", new_val)
-                return "break"  # 阻止事件继续传播，避免行选中
-        self.file_tree.bind("<Button-1>", on_tree_click, add="+")
-        # 双击行切换预览
-        self.file_tree.bind("<<TreeviewSelect>>", self.on_tree_select)
-        # 滚动条
-        tree_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.file_tree.yview)
-        tree_scrollbar.pack(side="right", fill="y")
-        self.file_tree.configure(yscrollcommand=tree_scrollbar.set)
+        list_frame = ttk.LabelFrame(self.left_scroll_content, text="图片列表", padding="5")
+        list_frame.pack(fill="x", pady=5)
+        list_frame.configure(height=200)
+        list_frame.pack_propagate(False)
+        # 使用 Canvas + Frame + Checkbutton 实现带滚动条的复选框列表
+        self.checklist_canvas = tk.Canvas(list_frame, highlightthickness=0, bg="white")
+        self.checklist_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.checklist_canvas.yview)
+        self.checklist_inner = ttk.Frame(self.checklist_canvas)
+        self.checklist_inner.bind("<Configure>", lambda e: self.checklist_canvas.configure(scrollregion=self.checklist_canvas.bbox("all")))
+        self._checklist_window_id = self.checklist_canvas.create_window((0, 0), window=self.checklist_inner, anchor="nw")
+        def _resize_checklist(event):
+            self.checklist_canvas.itemconfig(self._checklist_window_id, width=event.width)
+        self.checklist_canvas.bind("<Configure>", _resize_checklist)
+        self.checklist_canvas.configure(yscrollcommand=self.checklist_scrollbar.set)
+        self.checklist_scrollbar.pack(side="right", fill="y")
+        self.checklist_canvas.pack(side="left", fill="both", expand=True)
+        # 滚轮支持
+        def _on_list_mousewheel(event):
+            self.checklist_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+        self.checklist_canvas.bind("<MouseWheel>", _on_list_mousewheel)
+        self.checklist_inner.bind("<MouseWheel>", _on_list_mousewheel)
+        # 单击列表项切换预览（绑定到 inner 上，使用 bind_class 捕获所有子控件）
+        self.checklist_inner.bind("<Button-1>", self._on_checklist_click, add="+")
+        # 存储复选框变量列表: list of (frame, tk.BooleanVar, filepath)
+        self.check_vars = []
         panel_border = CollapsiblePanel(self.left_scroll_content, "添加边框", expanded=False)
         panel_border.pack(fill="x", pady=3)
-        param_frame = ttk.LabelFrame(panel_border.content, text="✏️ 水印参数")
+        param_frame = ttk.LabelFrame(panel_border.content, text="水印参数")
         param_frame.pack(fill=tk.X, pady=(0, 5))
         
         #循环创建行
@@ -225,10 +230,29 @@ class PhotoWatermarkApp:
         status_bar = ttk.Label(right_frame, textvariable=self.status_var, relief=tk.SUNKEN)
         status_bar.pack(fill=tk.X)
         self.canvas.bind("<Configure>", lambda e: self.root.after(200, self.show_preview))
-    def update_left_scroll_region(self, event):
-        content_h = self.left_scroll_content.winfo_reqheight()
-        canvas_w = self.left_canvas.winfo_width()
-        self.left_canvas.configure(scrollregion=(0, 0, canvas_w, content_h))
+        def _toggle_left_scrollbar():
+                    """根据内容高度决定滚动条显隐"""
+                    bbox = self.left_canvas.bbox("all")
+                    if bbox:
+                        canvas_h = self.left_canvas.winfo_height()
+                        content_h = bbox[3]
+                        if content_h > canvas_h:
+                            self.left_scrollbar.pack(side="right", fill="y")
+                        else:
+                            self.left_scrollbar.pack_forget()
+
+        def update_left_scroll_region(event=None):
+            """更新左侧 Canvas 的滚动区域"""
+            self.left_scroll_content.update_idletasks()
+            bbox = self.left_canvas.bbox("all")
+            if bbox and bbox[3] > 0:
+                self.left_canvas.configure(scrollregion=bbox)
+                _toggle_left_scrollbar()
+            else:
+                self.left_canvas.configure(scrollregion=(0, 0, 0, 0))
+                self.left_scrollbar.pack_forget()
+
+        self.left_scroll_content.bind("<Configure>", update_left_scroll_region)
 
     def auto_refresh_preview(self):
         # 仅首次加载时显示预览，后续由各控件按需触发
@@ -281,7 +305,7 @@ class PhotoWatermarkApp:
         for f in files:
             if f not in self.input_files:
                 self.input_files.append(f)
-                self.file_tree.insert("", tk.END, values=("☑️", os.path.basename(f)))
+                self._add_checklist_row(f)
                 added += 1
         if added > 0:
             self.status_var.set(f"已添加 {added} 张照片，共 {len(self.input_files)} 张")
@@ -292,25 +316,22 @@ class PhotoWatermarkApp:
             threading.Thread(target=self._precache_all_thumbnails, daemon=True).start()
     def delete_selected(self):
         # 获取所有勾选的行
-        checked_items = []
-        for item in self.file_tree.get_children():
-            if self.file_tree.set(item, "checked") == "☑️":
-                idx = self.file_tree.index(item)
-                checked_items.append(idx)
-        if not checked_items:
-            messagebox.showinfo("提示", "请先勾选要删除的照片（点击复选框列）")
+        checked_indices = [i for i, (_, var, _) in enumerate(self.check_vars) if var.get()]
+        if not checked_indices:
+            messagebox.showinfo("提示", "请先勾选要删除的照片")
             return
-        count = len(checked_items)
+        count = len(checked_indices)
         if count == 1:
-            filename = os.path.basename(self.input_files[checked_items[0]])
+            filename = os.path.basename(self.input_files[checked_indices[0]])
             if not messagebox.askyesno("确认删除", f"确定要删除 {filename} 吗？"):
                 return
         else:
             if not messagebox.askyesno("确认删除", f"确定要删除勾选的 {count} 张照片吗？"):
                 return
         # 从后往前删除，避免索引变化
-        for idx in reversed(checked_items):
-            self.file_tree.delete(self.file_tree.get_children()[idx])
+        for idx in reversed(checked_indices):
+            frame, _, _ = self.check_vars.pop(idx)
+            frame.destroy()
             del self.input_files[idx]
         if not self.input_files:
             self.current_index = -1
@@ -331,15 +352,20 @@ class PhotoWatermarkApp:
                 self.current_index = len(self.input_files) - 1
             self._update_preview_for_current()
     def select_all(self):
-        for item in self.file_tree.get_children():
-            self.file_tree.set(item, "checked", "☑️")
+        for _, var, _ in self.check_vars:
+            var.set(True)
+
+    def deselect_all(self):
+        for _, var, _ in self.check_vars:
+            var.set(False)
 
     def clear_all(self):
         if self.input_files and messagebox.askyesno("确认清空", "确定要清空所有照片吗？"):
             self.input_files = []
             self.current_index = -1
-            for item in self.file_tree.get_children():
-                self.file_tree.delete(item)
+            for frame, _, _ in self.check_vars:
+                frame.destroy()
+            self.check_vars.clear()
             self.canvas.delete("all")
             self.status_var.set("列表已清空")
             self.brand_var.set("")
@@ -352,14 +378,50 @@ class PhotoWatermarkApp:
             self.iso_var.set("")
             self.time_var.set("")
             self.loc_var.set("")
-    def on_tree_select(self, event):
-        sel = self.file_tree.selection()
-        if sel:
-            idx = self.file_tree.index(sel[0])
-            if idx != self.current_index:
-                self._save_current_edits()
-                self.current_index = idx
-                self._update_preview_for_current()
+    
+    def _update_checklist_scrollregion(self):
+        """强制更新图片列表 Canvas 的滚动区域"""
+        self.checklist_inner.update_idletasks()          # 确保子控件布局完成
+        self.checklist_canvas.configure(
+            scrollregion=self.checklist_canvas.bbox("all")
+        )
+
+    def _add_checklist_row(self, filepath):
+        """在复选框列表中添加一行"""
+        var = tk.BooleanVar(value=True)
+        row = ttk.Frame(self.checklist_inner)
+        row.pack(fill="x", padx=2, pady=1)
+        cb = ttk.Checkbutton(row, variable=var, text=os.path.basename(filepath))
+        cb.pack(side="left", fill="x", expand=True, anchor="w")
+        self.check_vars.append((row, var, filepath))
+        self._update_checklist_scrollregion()
+
+
+    def _on_checklist_click(self, event):
+        """单击行切换预览并高亮"""
+        widget = event.widget
+        # 向上查找点击的控件属于哪一行
+        for i, (frame, var, path) in enumerate(self.check_vars):
+            w = widget
+            while w and w != self.checklist_inner:
+                if w == frame:
+                    if i != self.current_index:
+                        self._save_current_edits()
+                        self.current_index = i
+                        self._update_preview_for_current()
+                        self._highlight_checklist_row(i)
+                    return
+                w = w.master
+
+    def _highlight_checklist_row(self, index):
+        """高亮当前选中的行"""
+        for i, (frame, var, path) in enumerate(self.check_vars):
+            for child in frame.winfo_children():
+                if isinstance(child, ttk.Checkbutton):
+                    if i == index:
+                        child.state(["selected"])
+                    else:
+                        child.state(["!selected"])
     def _update_preview_for_current(self):
         if self.current_index < 0 or self.current_index >= len(self.input_files):
             return
@@ -566,13 +628,10 @@ class PhotoWatermarkApp:
         if not has_any_func:
             messagebox.showwarning("提示", "请至少勾选一项功能（添加边框、明文水印、隐形水印）")
             return
-                # 获取所有勾选的图片
-        checked_indices = []
-        for item in self.file_tree.get_children():
-            if self.file_tree.set(item, "checked") == "☑️":
-                checked_indices.append(self.file_tree.index(item))
+        # 获取所有勾选的图片
+        checked_indices = [i for i, (_, var, _) in enumerate(self.check_vars) if var.get()]
         if not checked_indices:
-            messagebox.showwarning("提示", "请先勾选要处理的图片（点击复选框列）")
+            messagebox.showwarning("提示", "请先勾选要处理的图片")
             return
         checked_files = [self.input_files[i] for i in checked_indices]
         os.makedirs(self.output_path.get(), exist_ok=True)
