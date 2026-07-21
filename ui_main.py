@@ -118,7 +118,7 @@ class PhotoWatermarkApp:
         # 使用 Canvas + Frame + Checkbutton 实现带滚动条的复选框列表
         self.checklist_canvas = tk.Canvas(list_frame, highlightthickness=0, bg="white")
         self.checklist_scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=self.checklist_canvas.yview)
-        self.checklist_inner = ttk.Frame(self.checklist_canvas)
+        self.checklist_inner = tk.Frame(self.checklist_canvas, bg="white")
         self.checklist_inner.bind("<Configure>", lambda e: self.checklist_canvas.configure(scrollregion=self.checklist_canvas.bbox("all")))
         self._checklist_window_id = self.checklist_canvas.create_window((0, 0), window=self.checklist_inner, anchor="nw")
         def _resize_checklist(event):
@@ -134,7 +134,7 @@ class PhotoWatermarkApp:
         self.checklist_canvas.bind("<MouseWheel>", _on_list_mousewheel)
         self.checklist_inner.bind("<MouseWheel>", _on_list_mousewheel)
         # 单击列表项切换预览（绑定到 inner 上，使用 bind_class 捕获所有子控件）
-        self.checklist_inner.bind("<Button-1>", self._on_checklist_click, add="+")
+        # 改为在 _add_checklist_row 中为每个 Checkbutton 单独绑定
         # 存储复选框变量列表: list of (frame, tk.BooleanVar, filepath)
         self.check_vars = []
         panel_border = CollapsiblePanel(self.left_scroll_content, "添加边框", expanded=False)
@@ -404,39 +404,49 @@ class PhotoWatermarkApp:
     def _add_checklist_row(self, filepath):
         """在复选框列表中添加一行"""
         var = tk.BooleanVar(value=True)
-        row = ttk.Frame(self.checklist_inner)
+        row = tk.Frame(self.checklist_inner, bg="white")
         row.pack(fill="x", padx=2, pady=1)
-        cb = ttk.Checkbutton(row, variable=var, text=os.path.basename(filepath))
-        cb.pack(side="left", fill="x", expand=True, anchor="w")
+        # 用 Label 显示文件名，避免 Checkbutton 的默认点击行为干扰
+        cb = tk.Checkbutton(row, variable=var, bg="white", activebackground="white")
+        cb.pack(side="left")
+        lbl = tk.Label(row, text=os.path.basename(filepath), bg="white",
+                       anchor="w", padx=5)
+        lbl.pack(side="left", fill="x", expand=True)
+        # 绑定点击事件到 row 和所有子控件
+        for widget in (row, cb, lbl):
+            widget.bind("<Button-1>", self._on_checklist_click)
         self.check_vars.append((row, var, filepath))
         self._update_checklist_scrollregion()
 
 
     def _on_checklist_click(self, event):
-        """单击行切换预览并高亮"""
+        """单击行切换预览并高亮，不干涉复选框选中状态"""
         widget = event.widget
-        # 向上查找点击的控件属于哪一行
+        self.root.title(f"clicked: {type(widget).__name__}")
         for i, (frame, var, path) in enumerate(self.check_vars):
             w = widget
             while w and w != self.checklist_inner:
-                if w == frame:
-                    if i != self.current_index:
+                if w == frame or w.master == frame:
+                    self.root.title(f"MATCH i={i}")
+                    if self.current_index >= 0:
                         self._save_current_edits()
-                        self.current_index = i
-                        self._update_preview_for_current()
-                        self._highlight_checklist_row(i)
-                    return
+                    self.current_index = i
+                    self._update_preview_for_current()
+                    self._highlight_checklist_row(i)
+                    # 如果点击的是 Checkbutton 且 x<25（方框区域），手动切换复选框
+                    if isinstance(widget, tk.Checkbutton) and hasattr(event, "x") and event.x < 25:
+                        var.set(not var.get())
+                    return "break"
                 w = w.master
 
     def _highlight_checklist_row(self, index):
-        """高亮当前选中的行"""
+        """高亮当前选中的行（用背景色）"""
         for i, (frame, var, path) in enumerate(self.check_vars):
+            bg = "#E0F0FF" if i == index else "white"
+            frame.configure(bg=bg)
             for child in frame.winfo_children():
-                if isinstance(child, ttk.Checkbutton):
-                    if i == index:
-                        child.state(["selected"])
-                    else:
-                        child.state(["!selected"])
+                if isinstance(child, (tk.Checkbutton, tk.Label)):
+                    child.configure(bg=bg, activebackground=bg)
     def _update_preview_for_current(self):
         if self.current_index < 0 or self.current_index >= len(self.input_files):
             return
