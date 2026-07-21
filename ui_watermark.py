@@ -12,8 +12,8 @@ class WatermarkApp:
         self.font_size = tk.IntVar(value=20)
         self.font_color_var = tk.StringVar(value="黑色")
         self.color_map = {
-            "黑色": "#000000", "白色": "#FFFFFF", "红色": "#FF0000",
-            "蓝色": "#0000FF", "绿色": "#00FF00"
+            "黑色": "#000000", "白色": "#FFFFFF", "红色": "#ED4719",
+            "蓝色": "#498AEB", "绿色": "#009300"
         }
         self.is_bold = tk.BooleanVar(value=False)
         self.fonts = sorted(tkfont.families())
@@ -39,12 +39,18 @@ class WatermarkApp:
         size_spin.grid(row=1, column=1, padx=(5,0), pady=(5,0), sticky=tk.W)
         size_spin.bind("<<Increment>>", lambda e: self.main_app.show_preview())
         size_spin.bind("<<Decrement>>", lambda e: self.main_app.show_preview())
+        size_spin.bind("<MouseWheel>", lambda e: "break", add="+")
+        size_spin.bind("<Button-4>", lambda e: "break", add="+")
+        size_spin.bind("<Button-5>", lambda e: "break", add="+")
 
         ttk.Label(settings_frame, text="字体颜色:").grid(row=2, column=0, sticky=tk.W, pady=(5,0))
         color_options = list(self.color_map.keys())
         color_combo = ttk.Combobox(settings_frame, textvariable=self.font_color_var, values=color_options, state="readonly")
         color_combo.grid(row=2, column=1, padx=(5,0), pady=(5,0), sticky=tk.W)
         color_combo.bind("<<ComboboxSelected>>", lambda e: self.main_app.show_preview())
+        color_combo.bind("<MouseWheel>", lambda e: "break", add="+")
+        color_combo.bind("<Button-4>", lambda e: "break", add="+")
+        color_combo.bind("<Button-5>", lambda e: "break", add="+")
 
         bold_check = ttk.Checkbutton(settings_frame, text="加粗", variable=self.is_bold, command=self.main_app.show_preview)
         bold_check.grid(row=3, column=0, pady=(5,0), sticky=tk.W)
@@ -53,6 +59,9 @@ class WatermarkApp:
         font_combo = ttk.Combobox(settings_frame, textvariable=self.font_family, values=self.fonts, state="readonly")
         font_combo.grid(row=4, column=1, padx=(5,0), pady=(5,0), sticky=(tk.W, tk.E))
         font_combo.bind("<<ComboboxSelected>>", lambda e: self.main_app.show_preview())
+        font_combo.bind("<MouseWheel>", lambda e: "break", add="+")
+        font_combo.bind("<Button-4>", lambda e: "break", add="+")
+        font_combo.bind("<Button-5>", lambda e: "break", add="+")
 
         # 执行按钮
         ttk.Button(settings_frame, text="批量添加水印", command=self.add_watermark).grid(row=5, column=1, padx=(5,0), pady=(5,0), sticky=(tk.W, tk.E))

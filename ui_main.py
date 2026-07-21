@@ -78,6 +78,9 @@ class PhotoWatermarkApp:
         # 绑定鼠标滚轮滚动 - 仅当鼠标在 left_frame 内且不在子滚动区域时滚动 Canvas
         outer_self = self  # 捕获外部实例引用
         def on_mousewheel(event):
+            # 如果焦点在 Combobox 上，不处理滚轮（禁用下拉菜单滚轮切换）
+            if isinstance(event.widget, ttk.Combobox):
+                return
             # 如果在 checklist 子滚动区域，不处理
             w = event.widget
             while w:
@@ -150,16 +153,25 @@ class PhotoWatermarkApp:
         #粘贴左侧明文水印的功能到行里
         ttk.Label(row1, text="品牌：", width=6).pack(side=tk.LEFT)
         self.cbo_brand = ttk.Combobox(row1, textvariable=self.brand_var,values=list(CAMERA_DB.keys()), width=20, state="readonly")
+        self.cbo_brand.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_brand.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_brand.bind("<Button-5>", lambda e: "break", add="+")
         self.cbo_brand.pack(side=tk.LEFT, padx=(0, 10))
         self.cbo_brand.bind("<<ComboboxSelected>>", self.on_brand_change)
         self.cbo_brand.bind("<KeyRelease>", lambda e: self.on_brand_change())
         self.cbo_brand.bind("<<ComboboxSelected>>", lambda e: self.show_preview(), add="+")
         ttk.Label(row2, text="相机：", width=6).pack(side=tk.LEFT)
         self.cbo_cam = ttk.Combobox(row2, textvariable=self.camera_var, width=20, state="readonly")
+        self.cbo_cam.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_cam.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_cam.bind("<Button-5>", lambda e: "break", add="+")
         self.cbo_cam.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_cam.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row3, text="镜头：", width=6).pack(side=tk.LEFT)
         self.cbo_len = ttk.Combobox(row3, textvariable=self.lens_var, width=20, state="readonly")
+        self.cbo_len.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_len.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_len.bind("<Button-5>", lambda e: "break", add="+")
         self.cbo_len.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_len.pack(side=tk.LEFT)
         ttk.Label(row4, text="焦距：", width=6).pack(side=tk.LEFT)
@@ -172,6 +184,9 @@ class PhotoWatermarkApp:
         ttk.Entry(row7, textvariable=self.iso_var, width=20, state="readonly").pack(side=tk.LEFT)
         ttk.Label(row8, text="字体：", width=6).pack(side=tk.LEFT)
         self.font_cb = ttk.Combobox(row8, textvariable=self.selected_font,values=self.font_list, width=20, state="readonly")
+        self.font_cb.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.font_cb.bind("<Button-4>", lambda e: "break", add="+")
+        self.font_cb.bind("<Button-5>", lambda e: "break", add="+")
         self.font_cb.pack(side=tk.LEFT)
         self.font_cb.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         # ========== 第二个折叠面板：明文水印，内部嵌入Picmarker完整界面 ==========
