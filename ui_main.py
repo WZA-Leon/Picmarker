@@ -71,19 +71,19 @@ class PhotoWatermarkApp:
         self.left_scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.left_canvas.yview)
         self.left_scroll_content = ttk.Frame(self.left_canvas)
         self.left_scroll_content.bind("<Configure>", self.update_left_scroll_region)
-        self.left_canvas.create_window((0, 0), window=self.left_scroll_content, anchor="nw", width=350)
+        self.left_canvas.create_window((0, 0), window=self.left_scroll_content, anchor="nw", width=350, tags="inner")
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
         self.left_canvas.pack(side="left", fill="both", expand=True)
         self.left_scrollbar.pack(side="right", fill="y")
-        # 绑定鼠标滚轮滚动
+                # 绑定鼠标滚轮滚动 - 全局拦截，仅当鼠标在 left_frame 内时滚动 Canvas
         def on_mousewheel(event):
-            # Windows 滚轮每格是 120，向上为正，向下为负
-            delta = -1 if event.delta > 0 else 1
-            self.left_canvas.yview_scroll(delta, "units")
-        
-        # 绑定到 Canvas 和内容区域，确保鼠标在左侧任意位置都能滚动
-        self.left_canvas.bind("<MouseWheel>", on_mousewheel)
-        self.left_scroll_content.bind("<MouseWheel>", on_mousewheel)
+            widget = event.widget
+            while widget:
+                if widget == left_frame:
+                    self.left_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                    return "break"
+                widget = widget.master
+        self.root.bind_all("<MouseWheel>", on_mousewheel)
         btn_frame = ttk.Frame(self.left_scroll_content)
         btn_frame.pack(fill="x", pady=5)
         ttk.Button(btn_frame, text="➕ 添加图片", command=self.select_files).pack(side="left", padx=2)
@@ -104,10 +104,12 @@ class PhotoWatermarkApp:
         columns = ("checked", "filename")
         self.file_tree = ttk.Treeview(list_frame, columns=columns, show="headings",
                                       height=12, selectmode="browse")
+        # 禁用列拖动
+        self.file_tree.bind("<Button-1>", lambda e: "break" if self.file_tree.identify_region(e.x, e.y) == "separator" else None, add="+")
         self.file_tree.heading("checked", text="选择")
         self.file_tree.heading("filename", text="文件名")
-        self.file_tree.column("checked", width=45, anchor="center")
-        self.file_tree.column("filename", width=300)
+        self.file_tree.column("checked", width=45, anchor="center", stretch=False, minwidth=45)
+        self.file_tree.column("filename", width=290, anchor="center", stretch=False, minwidth=290)
         self.file_tree.pack(side="left", fill="both", expand=True)
         # 点击复选框列切换勾选状态（不触发预览）
         def on_tree_click(event):
@@ -219,14 +221,14 @@ class PhotoWatermarkApp:
         action_frame.pack(fill=tk.X, pady=6)
         ttk.Button(action_frame, text="🔄 刷新预览", command=self.show_preview).pack(side=tk.LEFT, padx=2)
         ttk.Button(action_frame, text="📦 处理照片", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
-        self.progress = ttk.Progressbar(right_frame, orient=tk.HORIZONTAL)
-        self.progress.pack(fill=tk.X, pady=(0, 3))
         self.status_var = tk.StringVar(value="就绪")
         status_bar = ttk.Label(right_frame, textvariable=self.status_var, relief=tk.SUNKEN)
         status_bar.pack(fill=tk.X)
         self.canvas.bind("<Configure>", lambda e: self.root.after(200, self.show_preview))
     def update_left_scroll_region(self, event):
-        self.left_canvas.configure(scrollregion=self.left_canvas.bbox("all"))
+        content_h = self.left_scroll_content.winfo_reqheight()
+        canvas_w = self.left_canvas.winfo_width()
+        self.left_canvas.configure(scrollregion=(0, 0, canvas_w, content_h))
 
     def auto_refresh_preview(self):
         # 仅首次加载时显示预览，后续由各控件按需触发
@@ -576,7 +578,6 @@ class PhotoWatermarkApp:
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
         total = len(checked_files)
-        self.progress["maximum"] = total
         dlg = ProgressDialog(self.root, "处理...")
         dlg.set_text(f"正在处理 0/{total}")
         
@@ -643,10 +644,8 @@ class PhotoWatermarkApp:
                     success += 1
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
-                self.progress["value"] = i + 1
                 self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
                 self.status_var.set(f"处理中... {i+1}/{total}")
-            self.progress["value"] = 0
             self.root.after(0, dlg.close)
             self.status_var.set(f"完成！成功 {success}/{total}")
             if not is_extract:
