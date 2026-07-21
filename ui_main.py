@@ -88,7 +88,7 @@ class PhotoWatermarkApp:
         btn_frame.pack(fill="x", pady=5)
         ttk.Button(btn_frame, text="➕ 添加图片", command=self.select_files).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="🗑 删除选中", command=self.delete_selected).pack(side="left", padx=2)
-        ttk.Button(btn_frame, text="📂 清空列表", command=self.clear_all).pack(side="left", padx=2)
+        ttk.Button(btn_frame, text="✅ 全选", command=self.select_all).pack(side="left", padx=2)
         # 功能启用/禁用开关
         enable_frame = ttk.LabelFrame(self.left_scroll_content, text="功能开关", padding="3")
         enable_frame.pack(fill="x", pady=3)
@@ -109,18 +109,18 @@ class PhotoWatermarkApp:
         self.file_tree.column("checked", width=45, anchor="center")
         self.file_tree.column("filename", width=300)
         self.file_tree.pack(side="left", fill="both", expand=True)
-        # 点击复选框列切换勾选状态
+        # 点击复选框列切换勾选状态（不触发预览）
         def on_tree_click(event):
             region = self.file_tree.identify_region(event.x, event.y)
-            if region == "cell":
-                col = self.file_tree.identify_column(event.x)
-                if col == "#1":
-                    item = self.file_tree.identify_row(event.y)
-                    if item:
-                        current = self.file_tree.set(item, "checked")
-                        new_val = "☐" if current == "☑" else "☑"
-                        self.file_tree.set(item, "checked", new_val)
-        self.file_tree.bind("<ButtonRelease-1>", on_tree_click)
+            col = self.file_tree.identify_column(event.x)
+            if region == "cell" and col == "#1":
+                item = self.file_tree.identify_row(event.y)
+                if item:
+                    current = self.file_tree.set(item, "checked")
+                    new_val = "🔲" if current == "☑️" else "☑️"
+                    self.file_tree.set(item, "checked", new_val)
+                return "break"  # 阻止事件继续传播，避免行选中
+        self.file_tree.bind("<Button-1>", on_tree_click, add="+")
         # 双击行切换预览
         self.file_tree.bind("<<TreeviewSelect>>", self.on_tree_select)
         # 滚动条
@@ -279,7 +279,7 @@ class PhotoWatermarkApp:
         for f in files:
             if f not in self.input_files:
                 self.input_files.append(f)
-                self.file_tree.insert("", tk.END, values=("☑", os.path.basename(f)))
+                self.file_tree.insert("", tk.END, values=("☑️", os.path.basename(f)))
                 added += 1
         if added > 0:
             self.status_var.set(f"已添加 {added} 张照片，共 {len(self.input_files)} 张")
@@ -292,7 +292,7 @@ class PhotoWatermarkApp:
         # 获取所有勾选的行
         checked_items = []
         for item in self.file_tree.get_children():
-            if self.file_tree.set(item, "checked") == "☑":
+            if self.file_tree.set(item, "checked") == "☑️":
                 idx = self.file_tree.index(item)
                 checked_items.append(idx)
         if not checked_items:
@@ -328,6 +328,10 @@ class PhotoWatermarkApp:
             if self.current_index >= len(self.input_files):
                 self.current_index = len(self.input_files) - 1
             self._update_preview_for_current()
+    def select_all(self):
+        for item in self.file_tree.get_children():
+            self.file_tree.set(item, "checked", "☑️")
+
     def clear_all(self):
         if self.input_files and messagebox.askyesno("确认清空", "确定要清空所有照片吗？"):
             self.input_files = []
@@ -563,7 +567,7 @@ class PhotoWatermarkApp:
                 # 获取所有勾选的图片
         checked_indices = []
         for item in self.file_tree.get_children():
-            if self.file_tree.set(item, "checked") == "☑":
+            if self.file_tree.set(item, "checked") == "☑️":
                 checked_indices.append(self.file_tree.index(item))
         if not checked_indices:
             messagebox.showwarning("提示", "请先勾选要处理的图片（点击复选框列）")
