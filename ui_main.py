@@ -65,6 +65,7 @@ class PhotoWatermarkApp:
         main_pw = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
         main_pw.pack(fill=tk.BOTH, expand=1, padx=10, pady=5)
         left_frame = ttk.Frame(main_pw, width=400)
+        self.left_frame = left_frame
         main_pw.add(left_frame, weight=0)
         # 禁止左侧面板被拖拽调整大小
         self.left_canvas = tk.Canvas(left_frame, highlightthickness=0)
@@ -75,27 +76,35 @@ class PhotoWatermarkApp:
         self.left_canvas.configure(yscrollcommand=self.left_scrollbar.set)
         self.left_canvas.pack(side="left", fill="both", expand=True)
         self.left_scrollbar.pack(side="right", fill="y")
-        # 绑定鼠标滚轮滚动 - 仅当鼠标在 left_frame 内且不在子滚动区域时滚动 Canvas
-        outer_self = self  # 捕获外部实例引用
-        def on_mousewheel(event):
-            # 如果焦点在 Combobox 上，不处理滚轮（禁用下拉菜单滚轮切换）
+        # 鼠标悬停跟踪：替代 event.widget 层级判断
+        self._mouse_in_left = False
+
+        def on_enter_left(event):
+            self._mouse_in_left = True
+
+        def on_leave_left(event):
+            self._mouse_in_left = False
+
+        def on_mousewheel_left(event):
             if isinstance(event.widget, ttk.Combobox):
-                return
-            # 如果在 checklist 子滚动区域，不处理
+                return "break"
+            # 检查事件是否来自 checklist 区域
             w = event.widget
             while w:
-                if w is outer_self.checklist_canvas or w is outer_self.checklist_inner:
-                    return
-                w = w.master
-            # 否则检查是否在 left_frame 内
-            widget = event.widget
-            while widget:
-                if widget == outer_self.left_frame:
-                    # 按像素滚动，每次移动 40 像素
-                    outer_self.left_canvas.yview_scroll(int(-1 * event.delta / 120) * 40, "pixels")
+                if w is self.checklist_canvas or w is self.checklist_inner:
                     return "break"
-                widget = widget.master
-        self.root.bind_all("<MouseWheel>", on_mousewheel)
+                w = w.master
+            # 检查鼠标是否在 left_canvas 区域内
+            if self._mouse_in_left:
+                self.left_canvas.yview_scroll(int(-1 * event.delta / 120), "units")
+                return "break"
+
+        left_frame.bind("<Enter>", on_enter_left, add="+")
+        left_frame.bind("<Leave>", on_leave_left, add="+")
+        self.left_canvas.bind("<Enter>", on_enter_left, add="+")
+        self.left_canvas.bind("<Leave>", on_leave_left, add="+")
+        self.left_canvas.bind("<MouseWheel>", on_mousewheel_left, add="+")
+        self.root.bind_all("<MouseWheel>", on_mousewheel_left, add="+")
         btn_frame = ttk.Frame(self.left_scroll_content)
         btn_frame.pack(fill="x", pady=5)
         ttk.Button(btn_frame, text="添加", width=4, command=self.select_files).pack(side="left", padx=2)
@@ -127,12 +136,13 @@ class PhotoWatermarkApp:
         self.checklist_canvas.configure(yscrollcommand=self.checklist_scrollbar.set)
         self.checklist_scrollbar.pack(side="right", fill="y")
         self.checklist_canvas.pack(side="left", fill="both", expand=True)
-        # 滚轮支持
+        # 滚轮支持 - 滚动时自动切换焦点到列表
         def _on_list_mousewheel(event):
+            self.checklist_canvas.focus_set()
             self.checklist_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
-        self.checklist_canvas.bind("<MouseWheel>", _on_list_mousewheel)
-        self.checklist_inner.bind("<MouseWheel>", _on_list_mousewheel)
+        self.checklist_canvas.bind("<MouseWheel>", _on_list_mousewheel, add="+")
+        self.checklist_inner.bind("<MouseWheel>", _on_list_mousewheel, add="+")
         # 单击列表项切换预览（绑定到 inner 上，使用 bind_class 捕获所有子控件）
         # 改为在 _add_checklist_row 中为每个 Checkbutton 单独绑定
         # 存储复选框变量列表: list of (frame, tk.BooleanVar, filepath)
@@ -406,18 +416,41 @@ class PhotoWatermarkApp:
         var = tk.BooleanVar(value=True)
         row = tk.Frame(self.checklist_inner, bg="white")
         row.pack(fill="x", padx=2, pady=1)
-        # 用 Label 显示文件名，避免 Checkbutton 的默认点击行为干扰
         cb = tk.Checkbutton(row, variable=var, bg="white", activebackground="white")
         cb.pack(side="left")
         lbl = tk.Label(row, text=os.path.basename(filepath), bg="white",
                        anchor="w", padx=5)
         lbl.pack(side="left", fill="x", expand=True)
-        # 绑定点击事件到 row 和所有子控件
-        for widget in (row, cb, lbl):
+                # 绑定点击事件到 row 和 Label（Checkbutton 自己处理点击）
+        for widget in (row, lbl):
             widget.bind("<Button-1>", self._on_checklist_click)
+            cb.bind("<Button-1>", self._on_checkbutton_click, add="+")
+        # 为所有子控件绑定滚轮事件
+        def _row_mousewheel(event):
+            self.checklist_canvas.focus_set()
+            self.checklist_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            return "break"
+        for widget in (row, cb, lbl):
+            widget.bind("<MouseWheel>", _row_mousewheel, add="+")
         self.check_vars.append((row, var, filepath))
         self._update_checklist_scrollregion()
 
+
+    def _on_checkbutton_click(self, event):
+        """Checkbutton 点击：切换勾选状态并切换预览"""
+        widget = event.widget
+        for i, (frame, var, path) in enumerate(self.check_vars):
+            w = widget
+            while w and w != self.checklist_inner:
+                if w == frame or w.master == frame:
+                    var.set(not var.get())
+                    if self.current_index >= 0:
+                        self._save_current_edits()
+                    self.current_index = i
+                    self._update_preview_for_current()
+                    self._highlight_checklist_row(i)
+                    return "break"
+                w = w.master
 
     def _on_checklist_click(self, event):
         """单击行切换预览并高亮，不干涉复选框选中状态"""
@@ -433,9 +466,6 @@ class PhotoWatermarkApp:
                     self.current_index = i
                     self._update_preview_for_current()
                     self._highlight_checklist_row(i)
-                    # 如果点击的是 Checkbutton 且 x<25（方框区域），手动切换复选框
-                    if isinstance(widget, tk.Checkbutton) and hasattr(event, "x") and event.x < 25:
-                        var.set(not var.get())
                     return "break"
                 w = w.master
 
@@ -542,6 +572,28 @@ class PhotoWatermarkApp:
     def show_preview(self):
         if not self.input_files or self.current_index == -1:
             return
+        # 三个功能都未启用时，只显示原图缩略图，不进行任何处理
+        has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
+        if not has_any_func:
+            dlg = ProgressDialog(self.root, "加载预览...")
+            dlg.set_text("正在渲染预览图")
+            try:
+                img_path = self.input_files[self.current_index]
+                cw = max(self.canvas.winfo_width(), 100)
+                ch = max(self.canvas.winfo_height(), 100)
+                with Image.open(img_path) as img:
+                    scale = min((cw-20)/img.width, (ch-20)/img.height, 1.0)
+                    thumb = img.resize((int(img.width*scale), int(img.height*scale)), RESAMPLE)
+                self.preview_img = ImageTk.PhotoImage(thumb)
+                self.canvas.delete("all")
+                self.canvas.create_image(cw//2, ch//2, image=self.preview_img, anchor=tk.CENTER)
+                self.preview_label.config(text=f"预览: {os.path.basename(self.input_files[self.current_index])}")
+                dlg.close()
+                return
+            except Exception as e:
+                dlg.close()
+                self.status_var.set(f"预览失败: {str(e)}")
+                return
         try:
             temp_dir = Path(__file__).parent / "temp"
             temp_dir.mkdir(exist_ok=True)
@@ -553,7 +605,7 @@ class PhotoWatermarkApp:
                 im = Image.open(self._cached_preview_path)
             else:
                 dlg = ProgressDialog(self.root, "生成预览...")
-                dlg.set_text("正在渲染预览图...")
+                dlg.set_text("正在渲染预览图")
                 # 1. 打开原图缩略到预览尺寸
                 with Image.open(img_path) as full_img:
                     scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
@@ -646,19 +698,19 @@ class PhotoWatermarkApp:
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
             return
-        if not messagebox.askyesno("确认处理", f"将处理 {len(self.input_files)} 张照片，是否继续？"):
-            return
-        # 检查是否有任何功能启用
-        has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
-        if not has_any_func:
-            messagebox.showwarning("提示", "请至少勾选一项功能（添加边框、明文水印、隐形水印）")
-            return
         # 获取所有勾选的图片
         checked_indices = [i for i, (_, var, _) in enumerate(self.check_vars) if var.get()]
         if not checked_indices:
             messagebox.showwarning("提示", "请先勾选要处理的图片")
             return
         checked_files = [self.input_files[i] for i in checked_indices]
+        if not messagebox.askyesno("确认处理", f"将处理 {len(checked_files)} 张照片，是否继续？"):
+            return
+        # 检查是否有任何功能启用
+        has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
+        if not has_any_func:
+            messagebox.showwarning("提示", "请至少勾选一项功能（添加边框、明文水印、隐形水印）")
+            return
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
         total = len(checked_files)

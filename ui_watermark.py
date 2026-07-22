@@ -63,10 +63,6 @@ class WatermarkApp:
         font_combo.bind("<Button-4>", lambda e: "break", add="+")
         font_combo.bind("<Button-5>", lambda e: "break", add="+")
 
-        # 执行按钮
-        ttk.Button(settings_frame, text="批量添加水印", command=self.add_watermark).grid(row=5, column=1, padx=(5,0), pady=(5,0), sticky=(tk.W, tk.E))
-
-
     def add_scattered_watermarks(self, image, text, font, color):
         width, height = image.size
         rotated_text = self.create_rotated_text_image(text, font, color)
