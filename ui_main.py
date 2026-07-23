@@ -17,6 +17,7 @@ from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel
 from ui_watermark import WatermarkApp
 from progress_util import ProgressDialog
 from hidden_watermark import DWTWatermark
+from ui_settings import SettingsWindow
 import piexif
 
 class PhotoWatermarkApp:
@@ -62,6 +63,13 @@ class PhotoWatermarkApp:
         style.map("Treeview", background=[("selected", "#0078D7")])
         main_container = ttk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=1)
+
+        # 右上角设置按钮
+        top_bar = ttk.Frame(main_container)
+        top_bar.pack(fill=tk.X, pady=(2, 0))
+        top_bar.columnconfigure(0, weight=1)
+        ttk.Button(top_bar, text="⚙ 设置", command=self.open_settings).pack(side=tk.RIGHT, padx=5)
+
         main_pw = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
         main_pw.pack(fill=tk.BOTH, expand=1, padx=10, pady=5)
         left_frame = ttk.Frame(main_pw, width=400)
@@ -796,6 +804,9 @@ class PhotoWatermarkApp:
                 self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
         threading.Thread(target=worker, daemon=True).start()
     
+    def open_settings(self):
+        SettingsWindow(self.root)
+
     def _toggle_hidden_mode(self):
         if self.hidden_mode.get() == "embed":
             self.hidden_text_label.grid()
