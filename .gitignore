@@ -1,5 +1,4 @@
 __pycache__/
-*.md
 venv
 temp/ 
 *.JPEG
