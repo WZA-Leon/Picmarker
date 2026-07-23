@@ -575,8 +575,9 @@ class PhotoWatermarkApp:
         # 三个功能都未启用时，只显示原图缩略图，不进行任何处理
         has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
         if not has_any_func:
-            dlg = ProgressDialog(self.root, "加载预览...")
+            dlg = ProgressDialog(self.root, "加载预览...", maximum=1)
             dlg.set_text("正在渲染预览图")
+            self.root.update()
             try:
                 img_path = self.input_files[self.current_index]
                 cw = max(self.canvas.winfo_width(), 100)
@@ -588,6 +589,7 @@ class PhotoWatermarkApp:
                 self.canvas.delete("all")
                 self.canvas.create_image(cw//2, ch//2, image=self.preview_img, anchor=tk.CENTER)
                 self.preview_label.config(text=f"预览: {os.path.basename(self.input_files[self.current_index])}")
+                dlg.set_progress(1)
                 dlg.close()
                 return
             except Exception as e:
@@ -604,13 +606,15 @@ class PhotoWatermarkApp:
             if self._cached_params.get("hash") == cur_hash and self._cached_preview_path and self._cached_preview_path.exists():
                 im = Image.open(self._cached_preview_path)
             else:
-                dlg = ProgressDialog(self.root, "生成预览...")
+                dlg = ProgressDialog(self.root, "生成预览...", maximum=4)
                 dlg.set_text("正在渲染预览图")
+                self.root.update()
                 # 1. 打开原图缩略到预览尺寸
                 with Image.open(img_path) as full_img:
                     scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
                     thumb_size = (int(full_img.width*scale), int(full_img.height*scale))
                     thumb = full_img.resize(thumb_size, RESAMPLE).convert("RGBA")
+                dlg.set_progress(1)
 
                 # 2. 在缩略图上直接绘制边框水印（按比例缩放参数）
                 if self.enable_border.get():
@@ -618,7 +622,7 @@ class PhotoWatermarkApp:
                     data = self.get_data()
                     font_name = self.selected_font.get()
                     tw, th = thumb.size
-                                        # 计算原图→缩略图的比例（用宽度比，确保宽高比一致）
+                    # 计算原图→缩略图的比例（用宽度比，确保宽高比一致）
                     with Image.open(img_path) as full_img:
                         scale_ratio = tw / full_img.width
                     from config import WM_CFG
@@ -668,6 +672,7 @@ class PhotoWatermarkApp:
                               time_text, fill=tuple(colors["time"]), font=font_time,
                               stroke_width=stroke_w, stroke_fill=stroke_c)
                     thumb = bordered
+                dlg.set_progress(2)
 
                 # 3. 在缩略图上叠加明文水印
                 if self.enable_watermark.get() and self.simple_watermark_panel:
@@ -678,6 +683,7 @@ class PhotoWatermarkApp:
                         overlay = Image.new("RGBA", thumb.size, (0, 0, 0, 0))
                         wm.add_scattered_watermarks(overlay, wm.watermark_text.get(), font, color)
                         thumb = Image.alpha_composite(thumb, overlay)
+                dlg.set_progress(3)
 
                 # 4. 保存预览缩略图到缓存（使用参数哈希，避免覆盖后台缓存）
                 tmp_thumb = temp_dir / f"_preview_{cur_hash}.jpg"
@@ -685,6 +691,7 @@ class PhotoWatermarkApp:
                 self._cached_preview_path = tmp_thumb
                 self._cached_params["hash"] = cur_hash
                 im = Image.open(tmp_thumb)
+                dlg.set_progress(4)
                 dlg.close()
             self.preview_img = ImageTk.PhotoImage(im)
             self.canvas.delete("all")
@@ -714,9 +721,9 @@ class PhotoWatermarkApp:
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
         total = len(checked_files)
-        dlg = ProgressDialog(self.root, "处理...")
+        dlg = ProgressDialog(self.root, "处理...", maximum=total)
         dlg.set_text(f"正在处理 0/{total}")
-        
+        self.root.update()    
         def worker():
             success = 0
             is_extract = self.hidden_mode.get() == "extract" and self.enable_hidden.get()
@@ -780,6 +787,7 @@ class PhotoWatermarkApp:
                     success += 1
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
+                self.root.after(0, lambda v=i+1: dlg.set_progress(v))
                 self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
                 self.status_var.set(f"处理中... {i+1}/{total}")
             self.root.after(0, dlg.close)

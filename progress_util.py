@@ -3,9 +3,9 @@ from tkinter import ttk
 
 
 class ProgressDialog:
-    """模态环形进度条弹窗，不可关闭，始终置顶，完成后自动关闭"""
+    """模态进度条弹窗，不可关闭，始终置顶，完成后自动关闭"""
 
-    def __init__(self, root, title="处理中..."):
+    def __init__(self, root, title="处理中...", maximum=100):
         self.root = root
         self.dialog = tk.Toplevel(root)
         self.dialog.title(title)
@@ -27,21 +27,26 @@ class ProgressDialog:
         self.label = ttk.Label(frame, text="请稍候...", anchor=tk.CENTER)
         self.label.pack(pady=(0, 10))
 
-        self.progress = ttk.Progressbar(frame, mode="indeterminate", length=250)
+        self.progress = ttk.Progressbar(frame, mode="determinate", length=250, maximum=maximum)
         self.progress.pack()
-        self.progress.start(10)
 
         self._closed = False
+        self.dialog.update()
 
     def set_text(self, text):
         self.label.config(text=text)
         self.root.update()
+        self.dialog.update()
+
+    def set_progress(self, value):
+        self.progress["value"] = value
+        self.root.update()
+        self.dialog.update()
 
     def close(self):
         if self._closed:
             return
         self._closed = True
-        self.progress.stop()
         self.dialog.grab_release()
         self.dialog.destroy()
 
