@@ -43,7 +43,7 @@ class DWTWatermark:
             return ""
 
     def embed(self, img_path: str, wm_text: str, output_path: str,
-              strength: float = 5.0, wavelet: str = 'haar') -> None:
+              strength: float = 5.0, wavelet: str = 'haar', redundancy: int = 5) -> None:
         """
         嵌入水印到图片
 
@@ -53,6 +53,7 @@ class DWTWatermark:
             output_path: 输出图片路径
             strength: 嵌入强度 (1.0~10.0)，越大越明显但抗攻击性越强
             wavelet: 小波类型，默认 'haar'
+            redundancy: 每个比特重复嵌入次数，越大越抗压缩但容量越小
         """
         img = Image.open(img_path).convert('RGB')
         img_array = np.array(img, dtype=np.float64)
@@ -70,25 +71,38 @@ class DWTWatermark:
         coeffs = pywt.dwt2(y, wavelet)
         cA, (cH, cV, cD) = coeffs
 
-        # 文本转比特 + 16个0作为结束标记
-        bits = self._text_to_bits(wm_text) + [0] * 16
+        # 文本转比特
+        text_bits = self._text_to_bits(wm_text)
+        # 长度头 (16bit) + 文本比特
+        length_header = [(len(text_bits) >> i) & 1 for i in range(15, -1, -1)]
+        bits = length_header + text_bits
         self.wm_bit = bits
 
         rng = self._init_rng(self.password)
         h_cH, w_cH = cH.shape
         total_pixels = h_cH * w_cH
 
-        if len(bits) > total_pixels:
-            raise ValueError(f"水印过长 ({len(bits)} bits)，子带尺寸 {h_cH}x{w_cH}={total_pixels}")
+        # 长度头嵌入到固定位置 (前16个像素)，每个比特重复 redundancy 次
+        header_positions = []
+        for idx in range(16):
+            for rep in range(redundancy):
+                header_positions.append(idx)
+        # 用 rng 为长度头的每个重复生成不同位置（避开文本区）
+        header_indices = rng.choice(total_pixels - 16, len(header_positions), replace=False) + 16
+        for pos, bit in zip(header_indices, [b for b in length_header for _ in range(redundancy)]):
+            r, c = pos // w_cH, pos % w_cH
+            if bit == 1:
+                cH[r, c] = abs(cH[r, c]) + strength
+            else:
+                cH[r, c] = -abs(cH[r, c]) - strength
 
-        # 随机选择嵌入位置
-        indices = rng.choice(total_pixels, len(bits), replace=False)
-        rows = indices // w_cH
-        cols = indices % w_cH
-
-        # 嵌入水印到 cH (水平细节子带)
-        for idx, (r, c) in enumerate(zip(rows, cols)):
-            if bits[idx] == 1:
+        # 文本比特嵌入到随机位置（避开长度头区域），每个比特重复 redundancy 次
+        text_with_end = text_bits
+        total_bits = len(text_with_end) * redundancy
+        text_indices = rng.choice(total_pixels - 16, total_bits, replace=False) + 16
+        for pos, bit in zip(text_indices, [b for b in text_with_end for _ in range(redundancy)]):
+            r, c = pos // w_cH, pos % w_cH
+            if bit == 1:
                 cH[r, c] = abs(cH[r, c]) + strength
             else:
                 cH[r, c] = -abs(cH[r, c]) - strength
@@ -104,34 +118,33 @@ class DWTWatermark:
             result[:, :, c] = np.clip(img_array[:, :, c] + diff, 0, 255)
         result = result.astype(np.uint8)
 
-        Image.fromarray(result).save(output_path, quality=95)
-
-        # 保存 EXIF
+        # 先读取原始 EXIF（必须在覆盖 output_path 之前，因为 img_path 可能等于 output_path）
+        exif_bytes = None
         try:
             exif_dict = piexif.load(img_path)
             exif_bytes = piexif.dump(exif_dict)
-            piexif.insert(exif_bytes, output_path)
         except Exception as e:
-            print(f"EXIF保存失败 ({Path(img_path).name}): {e}")
+            print(f"EXIF读取失败 ({Path(img_path).name}): {e}")
 
-        # 保存水印长度信息到项目根目录的 len 子文件夹
-        project_root = Path(__file__).parent
-        len_dir = project_root / "len"
-        len_dir.mkdir(exist_ok=True)
-        len_path = len_dir / f"{Path(output_path).stem}.len"
-        with open(len_path, 'w') as f:
-            f.write(str(len(bits)))
+        Image.fromarray(result).save(output_path, quality=95)
+
+        # 保存 EXIF
+        if exif_bytes is not None:
+            try:
+                piexif.insert(exif_bytes, output_path)
+            except Exception as e:
+                print(f"EXIF保存失败 ({Path(output_path).name}): {e}")
 
     def extract(self, img_path: str, wm_shape: int = None,
-                wavelet: str = 'haar') -> str:
+                wavelet: str = 'haar', redundancy: int = 5) -> str:
         """
         从图片中提取水印
 
         Args:
             img_path: 图片路径
-            wm_shape: 水印比特长度 (从 .len 文件读取)
+            wm_shape: 水印比特长度 (可选，默认从长度头自动读取)
             wavelet: 小波类型
-            
+            redundancy: 冗余次数，需与嵌入一致
 
         Returns:
             提取的文本
@@ -153,29 +166,32 @@ class DWTWatermark:
         h_cH, w_cH = cH.shape
         total_pixels = h_cH * w_cH
 
-        if wm_shape is None:
-            # 尝试从项目根目录 len 子文件夹读取
-            project_root = Path(__file__).parent
-            len_path = project_root / "len" / f"{Path(img_path).stem}.len"
-            if len_path.exists():
-                with open(len_path) as f:
-                    wm_shape = int(f.read())
-            else:
-                raise FileNotFoundError("未指定 wm_shape 且找不到 len 文件夹下的 .len 文件")
-
+        # 从固定位置读取长度头（前16个像素，每个重复 redundancy 次，多数投票）
         rng = self._init_rng(self.password)
-        indices = rng.choice(total_pixels, wm_shape, replace=False)
-        rows = indices // w_cH
-        cols = indices % w_cH
+        header_indices = rng.choice(total_pixels - 16, 16 * redundancy, replace=False) + 16
+        header_votes = [[] for _ in range(16)]
+        for i, pos in enumerate(header_indices):
+            r, c = pos // w_cH, pos % w_cH
+            header_votes[i // redundancy].append(1 if cH[r, c] > 0 else 0)
+        header_bits = [1 if sum(v) > redundancy // 2 else 0 for v in header_votes]
+        text_len = 0
+        for b in header_bits:
+            text_len = (text_len << 1) | b
 
-        bits = [1 if cH[r, c] > 0 else 0 for r, c in zip(rows, cols)]
+        # 文本比特
+        wm_shape = text_len
+
+        # 文本比特（多数投票）
+        total_bits = wm_shape * redundancy
+        indices = rng.choice(total_pixels - 16, total_bits, replace=False) + 16
+        votes = [[] for _ in range(wm_shape)]
+        for i, pos in enumerate(indices):
+            r, c = pos // w_cH, pos % w_cH
+            votes[i // redundancy].append(1 if cH[r, c] > 0 else 0)
+        bits = [1 if sum(v) > redundancy // 2 else 0 for v in votes]
         self.wm_bit = bits
 
-        # 找到连续16个0作为结束标记
-        text_bits = bits[:]
-        for i in range(len(text_bits) - 15):
-            if all(b == 0 for b in text_bits[i:i + 16]):
-                text_bits = text_bits[:i]
-                break
+        # 直接用长度头截取文本比特（前 text_len 个），无需结束标记
+        text_bits = bits[:text_len]
         return self._bits_to_text(text_bits)
 

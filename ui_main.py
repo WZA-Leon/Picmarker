@@ -346,7 +346,6 @@ class PhotoWatermarkApp:
                 self._add_checklist_row(f)
                 added += 1
         if added > 0:
-            self.status_var.set(f"已添加 {added} 张照片，共 {len(self.input_files)} 张")
             if self.current_index == -1:
                 self.current_index = 0
                 self._update_preview_for_current()
@@ -374,7 +373,6 @@ class PhotoWatermarkApp:
         if not self.input_files:
             self.current_index = -1
             self.canvas.delete("all")
-            self.status_var.set("列表已清空")
             self.brand_var.set("")
             self.camera_var.set("")
             self.lens_var.set("")
@@ -405,7 +403,6 @@ class PhotoWatermarkApp:
                 frame.destroy()
             self.check_vars.clear()
             self.canvas.delete("all")
-            self.status_var.set("列表已清空")
             self.brand_var.set("")
             self.camera_var.set("")
             self.lens_var.set("")
@@ -495,7 +492,6 @@ class PhotoWatermarkApp:
             return
         path = self.input_files[self.current_index]
         filename = os.path.basename(path)
-        self.status_var.set(f"当前: {filename} ({self.current_index+1}/{len(self.input_files)})")
         # 保存当前用户修改，切换图片时恢复
         if not hasattr(self, '_user_edits'):
             self._user_edits = {}
@@ -607,7 +603,6 @@ class PhotoWatermarkApp:
                 return
             except Exception as e:
                 dlg.close()
-                self.status_var.set(f"预览失败: {str(e)}")
                 return
         try:
             temp_dir = Path(__file__).parent / "temp"
@@ -713,7 +708,6 @@ class PhotoWatermarkApp:
         except Exception as e:
             if 'dlg' in dir():
                 dlg.close()
-            self.status_var.set(f"预览失败: {str(e)}")
     def start_batch(self):
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
@@ -797,14 +791,12 @@ class PhotoWatermarkApp:
                                     bw.embed(out, text, out)
                             except Exception as e:
                                 print(f"隐形水印嵌入失败 {name}: {e}")
-                    success += 1
+                                success += 1
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
                 self.root.after(0, lambda v=i+1: dlg.set_progress(v))
                 self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
-                self.status_var.set(f"处理中... {i+1}/{total}")
             self.root.after(0, dlg.close)
-            self.status_var.set(f"完成！成功 {success}/{total}")
             if not is_extract:
                 self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
         threading.Thread(target=worker, daemon=True).start()
@@ -822,8 +814,8 @@ class PhotoWatermarkApp:
         else:
             self.hidden_text_label.grid_remove()
             self.hidden_text_entry.grid_remove()
-            self.hidden_pwd_label.grid_remove()
-            self.hidden_pwd_entry.grid_remove()
+            self.hidden_pwd_label.grid()
+            self.hidden_pwd_entry.grid()
             self.hidden_hint.config(text="启用隐形水印开关后，处理将自动提取")
             # 提取模式下自动取消边框和明文水印的勾选
             self.enable_border.set(False)
