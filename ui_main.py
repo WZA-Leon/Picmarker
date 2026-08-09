@@ -64,17 +64,17 @@ class PhotoWatermarkApp:
         main_container = ttk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=1)
 
-        # 右上角设置按钮
+                # 顶部栏（仅占位，设置按钮已移至输出设置右侧）
         top_bar = ttk.Frame(main_container)
         top_bar.pack(fill=tk.X, pady=(2, 0))
         top_bar.columnconfigure(0, weight=1)
-        ttk.Button(top_bar, text="⚙ 设置", command=self.open_settings).pack(side=tk.RIGHT, padx=5)
 
-        main_pw = ttk.PanedWindow(main_container, orient=tk.HORIZONTAL)
+        main_pw = ttk.Frame(main_container)
         main_pw.pack(fill=tk.BOTH, expand=1, padx=10, pady=5)
         left_frame = ttk.Frame(main_pw, width=400)
         self.left_frame = left_frame
-        main_pw.add(left_frame, weight=0)
+        left_frame.pack(side=tk.LEFT, fill=tk.Y)
+        left_frame.pack_propagate(False)
         # 禁止左侧面板被拖拽调整大小
         self.left_canvas = tk.Canvas(left_frame, highlightthickness=0)
         self.left_scrollbar = ttk.Scrollbar(left_frame, orient="vertical", command=self.left_canvas.yview)
@@ -104,6 +104,13 @@ class PhotoWatermarkApp:
                 w = w.master
             # 检查鼠标是否在 left_canvas 区域内
             if self._mouse_in_left:
+                # 限制滚动范围，避免滚出内容顶部/底部出现空白
+                bbox = self.left_canvas.bbox("all")
+                if bbox:
+                    top, bottom = self.left_canvas.yview()
+                    delta = int(-1 * event.delta / 120)
+                    if (delta < 0 and top <= 0) or (delta > 0 and bottom >= 1.0):
+                        return "break"
                 self.left_canvas.yview_scroll(int(-1 * event.delta / 120), "units")
                 return "break"
 
@@ -113,7 +120,7 @@ class PhotoWatermarkApp:
         self.left_canvas.bind("<Leave>", on_leave_left, add="+")
         self.left_canvas.bind("<MouseWheel>", on_mousewheel_left, add="+")
         self.root.bind_all("<MouseWheel>", on_mousewheel_left, add="+")
-        btn_frame = ttk.Frame(self.left_scroll_content)
+        btn_frame = ttk.LabelFrame(self.left_scroll_content, text="图片操作", padding="3")
         btn_frame.pack(fill="x", pady=5)
         ttk.Button(btn_frame, text="添加", width=4, command=self.select_files).pack(side="left", padx=2)
         ttk.Button(btn_frame, text="删除", width=4, command=self.delete_selected).pack(side="left", padx=2)
@@ -227,41 +234,39 @@ class PhotoWatermarkApp:
         self.hidden_text = tk.StringVar(value="版权信息")
         self.hidden_text_entry = ttk.Entry(hidden_frame, textvariable=self.hidden_text, width=20)
         self.hidden_text_entry.grid(row=1, column=1, padx=5, pady=(5,0))
-        ttk.Label(hidden_frame, text="⚠ 处理速度较慢，请耐心等待", foreground="red", font=("Arial", 16, "bold")).grid(row=2, column=0, columnspan=2, pady=5)
+        tk.Label(hidden_frame, text="处理速度较慢，请耐心等待", foreground="red", bg="#f0f0f0", font=("Microsoft YaHei", 11, "bold")).grid(row=2, column=0, columnspan=2, pady=8)
         # 嵌入/提取模式选择
         self.hidden_mode = tk.StringVar(value="embed")
         mode_frame = ttk.Frame(hidden_frame)
         mode_frame.grid(row=3, column=0, columnspan=2, pady=3)
         ttk.Radiobutton(mode_frame, text="嵌入", variable=self.hidden_mode, value="embed", command=self._toggle_hidden_mode).pack(side=tk.LEFT, padx=5)
         ttk.Radiobutton(mode_frame, text="提取", variable=self.hidden_mode, value="extract", command=self._toggle_hidden_mode).pack(side=tk.LEFT, padx=5)
-        self.hidden_hint = ttk.Label(hidden_frame, text="💡 启用隐形水印开关后，处理将自动嵌入", foreground="gray")
+        self.hidden_hint = ttk.Label(hidden_frame, text="启用隐形水印开关后，处理将自动嵌入", foreground="gray")
         self.hidden_hint.grid(row=5, column=0, columnspan=2, pady=(10,0))
         right_frame = ttk.Frame(main_pw)
-        main_pw.add(right_frame, weight=1)
-        path_frame = ttk.LabelFrame(right_frame, text="💾 输出设置")
+        right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        path_frame = ttk.LabelFrame(right_frame, text="输出设置")
         path_frame.pack(fill=tk.X, pady=(0, 5))
         path_inner = ttk.Frame(path_frame)
         path_inner.pack(fill=tk.X, padx=8, pady=6)
         ttk.Label(path_inner, text="保存路径：").pack(side=tk.LEFT)
-        ttk.Entry(path_inner, textvariable=self.output_path, width=50).pack(side=tk.LEFT, padx=6)
+        ttk.Entry(path_inner, textvariable=self.output_path, width=40).pack(side=tk.LEFT, padx=6)
         ttk.Button(path_inner, text="浏览...", command=self.select_out_dir).pack(side=tk.LEFT, padx=2)
-        preview_frame = ttk.LabelFrame(right_frame, text="🖼 效果预览")
+        ttk.Button(path_inner, text="软件设置", command=self.open_settings).pack(side=tk.RIGHT, padx=2)
+        preview_frame = ttk.LabelFrame(right_frame, text="效果预览")
         preview_frame.pack(fill=tk.BOTH, expand=1, pady=(0, 5))
         preview_ctrl = ttk.Frame(preview_frame)
         preview_ctrl.pack(fill=tk.X, padx=8, pady=4)
-        ttk.Button(preview_ctrl, text="◀ 上一张", command=self.prev_image).pack(side=tk.LEFT, padx=2)
-        ttk.Button(preview_ctrl, text="下一张 ▶", command=self.next_image).pack(side=tk.LEFT, padx=2)
+        ttk.Button(preview_ctrl, text="上一张", command=self.prev_image).pack(side=tk.LEFT, padx=2)
+        ttk.Button(preview_ctrl, text="下一张", command=self.next_image).pack(side=tk.LEFT, padx=2)
         self.preview_label = ttk.Label(preview_ctrl, text="")
         self.preview_label.pack(side=tk.LEFT, padx=10)
         self.canvas = tk.Canvas(preview_frame, bg="#f5f5f5", highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         action_frame = ttk.Frame(right_frame)
         action_frame.pack(fill=tk.X, pady=6)
-        ttk.Button(action_frame, text="🔄 刷新预览", command=self.show_preview).pack(side=tk.LEFT, padx=2)
-        ttk.Button(action_frame, text="📦 处理照片", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
-        self.status_var = tk.StringVar(value="就绪")
-        status_bar = ttk.Label(right_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.pack(fill=tk.X)
+        ttk.Button(action_frame, text="刷新预览", command=self.show_preview).pack(side=tk.LEFT, padx=2)
+        ttk.Button(action_frame, text="处理照片", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
         self.canvas.bind("<Configure>", lambda e: self.root.after(200, self.show_preview))
         def _toggle_left_scrollbar():
                     """根据内容高度决定滚动条显隐"""
@@ -813,13 +818,13 @@ class PhotoWatermarkApp:
             self.hidden_text_entry.grid()
             self.hidden_pwd_label.grid()
             self.hidden_pwd_entry.grid()
-            self.hidden_hint.config(text="💡 启用隐形水印开关后，处理将自动嵌入")
+            self.hidden_hint.config(text="启用隐形水印开关后，处理将自动嵌入")
         else:
             self.hidden_text_label.grid_remove()
             self.hidden_text_entry.grid_remove()
             self.hidden_pwd_label.grid_remove()
             self.hidden_pwd_entry.grid_remove()
-            self.hidden_hint.config(text="💡 启用隐形水印开关后，处理将自动提取")
+            self.hidden_hint.config(text="启用隐形水印开关后，处理将自动提取")
             # 提取模式下自动取消边框和明文水印的勾选
             self.enable_border.set(False)
             self.enable_watermark.set(False)

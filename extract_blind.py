@@ -14,7 +14,7 @@ def extract_blind(image_path: str, password: str = "123456") -> str:
     try:
         from blind_watermark import WaterMark
     except ImportError:
-        print("❌ 请先安装 blind-watermark: pip install blind-watermark")
+        print("❌请先安装 blind-watermark: pip install blind-watermark")
         sys.exit(1)
 
     from PIL import Image

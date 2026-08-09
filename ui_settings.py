@@ -1,6 +1,6 @@
 # ui_settings.py
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, font as tkfont
 from PIL import Image, ImageTk
 from pathlib import Path
 
@@ -65,7 +65,7 @@ class SettingsWindow:
             logo_label = ttk.Label(scroll_frame, image=self.logo_img)
             logo_label.pack(fill=tk.X, pady=(0, 15))
         else:
-            ttk.Label(scroll_frame, text="[Logo]", font=("Arial", 24)).pack(pady=(0, 15))
+            ttk.Label(scroll_frame, text="[Logo]", font=("Microsoft YaHei", 24)).pack(pady=(0, 15))
 
         # 读取 README.md 内容
         readme_path = Path(__file__).parent / "README.md"
@@ -78,13 +78,13 @@ class SettingsWindow:
         for line in content.split("\n"):
             stripped = line.strip()
             if stripped.startswith("# ") and not stripped.startswith("## "):
-                lbl = ttk.Label(scroll_frame, text=line, font=("Arial", 16, "bold"))
+                lbl = ttk.Label(scroll_frame, text=line, font=tkfont.Font(family="Microsoft YaHei", size=16, weight="bold"))
                 lbl.pack(anchor="w", pady=(12, 4))
             elif stripped.startswith("## ") and not stripped.startswith("### "):
-                lbl = ttk.Label(scroll_frame, text=line, font=("Arial", 14, "bold"))
+                lbl = ttk.Label(scroll_frame, text=line, font=tkfont.Font(family="Microsoft YaHei", size=14, weight="bold"))
                 lbl.pack(anchor="w", pady=(8, 3))
             elif stripped.startswith("### "):
-                lbl = ttk.Label(scroll_frame, text=line, font=("Arial", 12, "bold"))
+                lbl = ttk.Label(scroll_frame, text=line, font=tkfont.Font(family="Microsoft YaHei", size=12, weight="bold"))
                 lbl.pack(anchor="w", pady=(5, 2))
             elif stripped.startswith("- "):
                 lbl = ttk.Label(scroll_frame, text="  • " + line.strip()[2:], wraplength=600, justify="left")
@@ -104,7 +104,7 @@ class SettingsWindow:
             text="GitHub: https://www.github.com/WZA-Leon/Picmarker",
             foreground="blue",
             cursor="hand2",
-            font=("Arial", 10)
+            font=("Microsoft YaHei", 10)
         )
         link_label.pack(anchor="w", pady=(5, 10))
         link_label.bind("<Button-1>", lambda e: self._open_link())
