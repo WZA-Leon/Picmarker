@@ -200,13 +200,17 @@ class PhotoWatermarkApp:
         self.cbo_len.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_len.pack(side=tk.LEFT)
         ttk.Label(row4, text="焦距：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row4, textvariable=self.focal_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
+        self.ent_focal = ttk.Entry(row4, textvariable=self.focal_var, width=20, state="readonly")
+        self.ent_focal.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row5, text="光圈：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row5, textvariable=self.f_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
+        self.ent_f = ttk.Entry(row5, textvariable=self.f_var, width=20, state="readonly")
+        self.ent_f.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row6, text="快门：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row6, textvariable=self.exp_var, width=20, state="readonly").pack(side=tk.LEFT, padx=(0, 10))
+        self.ent_exp = ttk.Entry(row6, textvariable=self.exp_var, width=20, state="readonly")
+        self.ent_exp.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row7, text="ISO：", width=6).pack(side=tk.LEFT)
-        ttk.Entry(row7, textvariable=self.iso_var, width=20, state="readonly").pack(side=tk.LEFT)
+        self.ent_iso = ttk.Entry(row7, textvariable=self.iso_var, width=20, state="readonly")
+        self.ent_iso.pack(side=tk.LEFT)
         ttk.Label(row8, text="字体：", width=6).pack(side=tk.LEFT)
         self.font_cb = ttk.Combobox(row8, textvariable=self.selected_font,values=self.font_list, width=20, state="readonly")
         self.font_cb.bind("<MouseWheel>", lambda e: "break", add="+")
@@ -383,6 +387,13 @@ class PhotoWatermarkApp:
             self.iso_var.set("")
             self.time_var.set("")
             self.loc_var.set("")
+            self.cbo_brand.config(state="readonly")
+            self.cbo_cam.config(state="readonly")
+            self.cbo_len.config(state="readonly")
+            self.ent_focal.config(state="normal")
+            self.ent_f.config(state="normal")
+            self.ent_exp.config(state="normal")
+            self.ent_iso.config(state="normal")
         else:
             if self.current_index >= len(self.input_files):
                 self.current_index = len(self.input_files) - 1
@@ -413,6 +424,13 @@ class PhotoWatermarkApp:
             self.iso_var.set("")
             self.time_var.set("")
             self.loc_var.set("")
+            self.cbo_brand.config(state="readonly")
+            self.cbo_cam.config(state="readonly")
+            self.cbo_len.config(state="readonly")
+            self.ent_focal.config(state="normal")
+            self.ent_f.config(state="normal")
+            self.ent_exp.config(state="normal")
+            self.ent_iso.config(state="normal")
     
     def _update_checklist_scrollregion(self):
         """强制更新图片列表 Canvas 的滚动区域"""
@@ -495,7 +513,7 @@ class PhotoWatermarkApp:
         # 保存当前用户修改，切换图片时恢复
         if not hasattr(self, '_user_edits'):
             self._user_edits = {}
-        # 先保存当前图片的用户修改
+                # 先保存当前图片的用户修改
         if self.current_index in self._user_edits:
             edits = self._user_edits[self.current_index]
         else:
@@ -513,6 +531,18 @@ class PhotoWatermarkApp:
                 "photo_name": ""
             }
             self._user_edits[self.current_index] = edits
+                # 存在相机/镜头 EXIF 时禁用自定义选择，否则允许自定义
+        has_exif = bool(edits.get("camera") or edits.get("lens"))
+        state = "disabled" if has_exif else "readonly"
+        self.cbo_brand.config(state=state)
+        self.cbo_cam.config(state=state)
+        self.cbo_len.config(state=state)
+        # 焦距/光圈/快门/ISO：EXIF 存在时禁用，否则允许编辑
+        for ent, val in ((self.ent_focal, edits.get("focal")),
+                         (self.ent_f, edits.get("f")),
+                         (self.ent_exp, edits.get("exp")),
+                         (self.ent_iso, edits.get("iso"))):
+            ent.config(state="disabled" if val else "normal")
         self.brand_var.set(edits["brand"])
         self.on_brand_change()
         self.camera_var.set(edits["camera"])
