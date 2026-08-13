@@ -7,6 +7,7 @@ import pywt
 from PIL import Image
 from pathlib import Path
 import piexif
+from utils import apply_exif_orientation
 
 
 class DWTWatermark:
@@ -55,7 +56,7 @@ class DWTWatermark:
             wavelet: 小波类型，默认 'haar'
             redundancy: 每个比特重复嵌入次数，越大越抗压缩但容量越小
         """
-        img = Image.open(img_path).convert('RGB')
+        img = apply_exif_orientation(Image.open(img_path)).convert('RGB')
         img_array = np.array(img, dtype=np.float64)
 
         # RGB → Y (亮度通道)
@@ -122,6 +123,8 @@ class DWTWatermark:
         exif_bytes = None
         try:
             exif_dict = piexif.load(img_path)
+            # 图片按 EXIF 方向旋转，重置 Orientation 为 1，避免查看器二次旋转
+            exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
             exif_bytes = piexif.dump(exif_dict)
         except Exception as e:
             print(f"EXIF读取失败 ({Path(img_path).name}): {e}")
@@ -142,14 +145,14 @@ class DWTWatermark:
 
         Args:
             img_path: 图片路径
-            wm_shape: 水印比特长度 (可选，默认从长度头自动读取)
+            wm_shape: 水印比特长度 (从长度头自动读取)
             wavelet: 小波类型
             redundancy: 冗余次数，需与嵌入一致
 
         Returns:
             提取的文本
         """
-        img = Image.open(img_path).convert('RGB')
+        img = apply_exif_orientation(Image.open(img_path)).convert('RGB')
         img_array = np.array(img, dtype=np.float64)
 
         y = 0.299 * img_array[:, :, 0] + 0.587 * img_array[:, :, 1] + 0.114 * img_array[:, :, 2]

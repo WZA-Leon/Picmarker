@@ -3,6 +3,8 @@ from tkinter import ttk,messagebox,font as tkfont
 from PIL import Image, ImageDraw, ImageFont
 import os
 import platform
+import piexif
+from utils import apply_exif_orientation
 
 class WatermarkApp:
     def __init__(self, parent_frame, main_app):
@@ -134,12 +136,19 @@ class WatermarkApp:
         success_count = 0
         for image_path in image_paths:
             try:
-                image = Image.open(image_path)
+                image = apply_exif_orientation(Image.open(image_path))
                 font = self.get_font(self.font_family.get(), self.font_size.get())
                 self.add_scattered_watermarks(image, self.watermark_text.get(), font, font_color)
                 base_name = os.path.basename(image_path)
                 output_file = os.path.join(output_path, f"watermarked_{base_name}")
                 image.save(output_file)
+                # 恢复 EXIF（图片已按方向旋转，重置 Orientation 为 1）
+                try:
+                    exif_dict = piexif.load(image_path)
+                    exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
+                    piexif.insert(piexif.dump(exif_dict), output_file)
+                except:
+                    pass
                 success_count += 1
             except Exception as e:
                 messagebox.showerror("错误", f"处理失败 {os.path.basename(image_path)}:{str(e)}")

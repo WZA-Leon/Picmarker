@@ -3,7 +3,7 @@ import platform
 from pathlib import Path
 import exifread
 import piexif
-from PIL import Image, ImageDraw, ImageFont, ImageTk
+from PIL import Image, ImageDraw, ImageFont, ImageTk, ImageOps
 import tkinter as tk
 from tkinter import ttk, font as tkfont
 import winreg  # 仅在 Windows 下使用
@@ -20,11 +20,18 @@ except:
     RESAMPLE = Image.LANCZOS
 
 
+def apply_exif_orientation(img):
+    """根据 EXIF Orientation 信息旋转图片，使竖拍照片正确显示"""
+    try:
+        return ImageOps.exif_transpose(img)
+    except Exception:
+        return img
+
+
 class ExifReader:
     @staticmethod
     def _safe_str(val):
         return str(val).strip()
-
     @staticmethod
     def get_exif_full(image_path):
         info = {
@@ -181,7 +188,7 @@ class WatermarkGenerator:
     @staticmethod
     def add_watermark(img_path, out_path, data, font_name):
         # 完整实现，与原始代码完全一致
-        img = Image.open(img_path).convert("RGB")
+        img = apply_exif_orientation(Image.open(img_path)).convert("RGB")
         w, h = img.size
         bar_h = WM_CFG["bar_height"]
         bg = tuple(WM_CFG["background_color"])
@@ -230,6 +237,8 @@ class WatermarkGenerator:
         new_img.save(out_path, quality=95)
         try:
             exif_dict = piexif.load(img_path)
+            # 图片已按 EXIF 方向旋转，重置 Orientation 为 1，避免查看器二次旋转
+            exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
             exif_bytes = piexif.dump(exif_dict)
             piexif.insert(exif_bytes, out_path)
         except Exception as e:

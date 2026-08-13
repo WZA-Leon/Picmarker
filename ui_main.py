@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 from config import GUI_CFG, CAMERA_DB
-from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel
+from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel, apply_exif_orientation
 from ui_watermark import WatermarkApp
 from progress_util import ProgressDialog
 from hidden_watermark import DWTWatermark
@@ -560,6 +560,7 @@ class PhotoWatermarkApp:
                 continue
             try:
                 with Image.open(path) as img:
+                    img = apply_exif_orientation(img)
                     scale = min(800/img.width, 600/img.height, 1.0)
                     thumb = img.resize((int(img.width*scale), int(img.height*scale)), RESAMPLE)
                     thumb.convert("RGB").save(cache_path, quality=85)
@@ -592,6 +593,7 @@ class PhotoWatermarkApp:
                 cw = max(self.canvas.winfo_width(), 100)
                 ch = max(self.canvas.winfo_height(), 100)
                 with Image.open(img_path) as img:
+                    img = apply_exif_orientation(img)
                     scale = min((cw-20)/img.width, (ch-20)/img.height, 1.0)
                     thumb = img.resize((int(img.width*scale), int(img.height*scale)), RESAMPLE)
                 self.preview_img = ImageTk.PhotoImage(thumb)
@@ -619,6 +621,7 @@ class PhotoWatermarkApp:
                 self.root.update()
                 # 1. 打开原图缩略到预览尺寸
                 with Image.open(img_path) as full_img:
+                    full_img = apply_exif_orientation(full_img)
                     scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
                     thumb_size = (int(full_img.width*scale), int(full_img.height*scale))
                     thumb = full_img.resize(thumb_size, RESAMPLE).convert("RGBA")
@@ -632,6 +635,7 @@ class PhotoWatermarkApp:
                     tw, th = thumb.size
                     # 计算原图→缩略图的比例（用宽度比，确保宽高比一致）
                     with Image.open(img_path) as full_img:
+                        full_img = apply_exif_orientation(full_img)
                         scale_ratio = tw / full_img.width
                     from config import WM_CFG
                     bar_h = int(WM_CFG["bar_height"] * scale_ratio)
@@ -768,14 +772,15 @@ class PhotoWatermarkApp:
                         if self.enable_watermark.get() and self.simple_watermark_panel:
                             wm = self.simple_watermark_panel
                             if wm.watermark_text.get().strip():
-                                img = Image.open(out).convert("RGBA")
+                                img = apply_exif_orientation(Image.open(out)).convert("RGBA")
                                 wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get())
                                 color = wm.color_map[wm.font_color_var.get()]
                                 wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
                                 img.convert("RGB").save(out, quality=95)
-                                # 恢复 EXIF
+                                # 恢复 EXIF（图片已按方向旋转，重置 Orientation 为 1）
                                 try:
                                     exif_dict = piexif.load(f)
+                                    exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
                                     exif_bytes = piexif.dump(exif_dict)
                                     piexif.insert(exif_bytes, out)
                                 except:
