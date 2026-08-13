@@ -180,58 +180,93 @@ class WatermarkGenerator:
         if icon_file:
             icon_path = icon_dir / icon_file
             if icon_path.exists():
-                icon = Image.open(icon_path).convert("RGBA")
-                max_h = WM_CFG.get("icon_max_height", 140)
-                return WatermarkGenerator.resize_by_height(icon, max_h)
-        return Image.new("RGBA", (1, WM_CFG.get("icon_max_height", 140)), (0, 0, 0, 0))
+                return Image.open(icon_path).convert("RGBA")
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
 
     @staticmethod
     def add_watermark(img_path, out_path, data, font_name):
         # 完整实现，与原始代码完全一致
         img = apply_exif_orientation(Image.open(img_path)).convert("RGB")
         w, h = img.size
-        bar_h = WM_CFG["bar_height"]
+        # 边框高度：按图片高度百分比计算，但限制长宽比不小于 5:1
+        bar_h = max(1, int(h * WM_CFG["bar_height_percent"] / 100))
+        bar_h = min(bar_h, int(w / 5))
+        # 以图片宽度为基准计算缩放比例（基准宽度 base_width 对应配置中的原始尺寸）
+        scale = w / WM_CFG["base_width"]
         bg = tuple(WM_CFG["background_color"])
-        bg = tuple(WM_CFG["background_color"])
-        icon_left = WM_CFG["icon_margin_left"]
-        icon_right = WM_CFG["icon_margin_right"]
-        v_off = WM_CFG["vertical_center_offset"]
+        icon_left = int(WM_CFG["icon_margin_left"] * scale)
+        icon_right = int(WM_CFG["icon_margin_right"] * scale)
         new_img = Image.new("RGB", (w, h + bar_h), bg)
         new_img.paste(img, (0, 0))
         draw = ImageDraw.Draw(new_img)
         fc = WM_CFG["fonts"]
         colors = WM_CFG["colors"]
         stroke_en = WM_CFG["stroke"]["enabled"]
-        stroke_w = WM_CFG["stroke"]["width"] if stroke_en else 0
+        stroke_w = int(WM_CFG["stroke"]["width"] * scale) if stroke_en else 0
         stroke_c = tuple(WM_CFG["stroke"]["fill"]) if stroke_en else None
-        font_cam = WatermarkGenerator.get_font(font_name, fc["camera"])
-        font_len = WatermarkGenerator.get_font(font_name, fc["lens"])
-        font_name_f = WatermarkGenerator.get_font(font_name, fc["name"])
-        font_param = WatermarkGenerator.get_font(font_name, fc["params"])
-        font_time = WatermarkGenerator.get_font(font_name, fc["time"])
+        font_cam = WatermarkGenerator.get_font(font_name, max(1, int(fc["camera"] * scale)))
+        font_len = WatermarkGenerator.get_font(font_name, max(1, int(fc["lens"] * scale)))
+        font_name_f = WatermarkGenerator.get_font(font_name, max(1, int(fc["name"] * scale)))
+        font_param = WatermarkGenerator.get_font(font_name, max(1, int(fc["params"] * scale)))
+        font_time = WatermarkGenerator.get_font(font_name, max(1, int(fc["time"] * scale)))
         icon = WatermarkGenerator.load_brand_icon(data["brand"])
-        icon_y = h + (bar_h - icon.height)//2-10
+        # logo 按图片宽度缩放，宽度不超过边框宽度的 1/5
+        icon_h = max(1, int(icon.height * scale))
+        icon = icon.resize((max(1, int(icon.width * scale)), icon_h), RESAMPLE)
+        max_icon_w = int(w / 5)
+        if icon.width > max_icon_w:
+            icon = icon.resize((max_icon_w, max(1, int(icon.height * max_icon_w / icon.width))), RESAMPLE)
+        # 图标垂直居中于边框（距上下边框相同）
+        icon_y = h + (bar_h - icon.height)//2
         new_img.paste(icon, (icon_left, icon_y), icon)
         left_x = icon_left + icon.width + icon_right
-        base_y = h + (bar_h//2) - v_off
         left_cfg = WM_CFG["left_text"]
-        cam_pos = (left_x + left_cfg["camera"]["x_offset"], base_y + left_cfg["camera"]["y"])
-        draw.text(cam_pos, data["camera"], fill=tuple(colors["camera"]), font=font_cam,
-                  stroke_width=stroke_w, stroke_fill=stroke_c)
-        lens_pos = (left_x + left_cfg["lens"]["x_offset"], base_y + left_cfg["lens"]["y"])
-        draw.text(lens_pos, data["lens"], fill=tuple(colors["lens"]), font=font_len,
-                                    stroke_width=stroke_w, stroke_fill=stroke_c)
         right_cfg = WM_CFG["right_text"]
+        # 计算左右两侧文字内容
+        cam_text = data["camera"]
+        lens_text = data["lens"]
         param_text = f"{data['focal']}  {data['f']}  {data['exp']}  {data['iso']}"
         time_text = f"{data['datetime']}"
+        # 用 textbbox 计算各文字包围盒，实现垂直居中
+        def _bbox(text, font):
+            b = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_w)
+            return b[1], b[3]  # top, bottom
+        cam_t, cam_b = _bbox(cam_text, font_cam)
+        lens_t, lens_b = _bbox(lens_text, font_len)
+        param_t, param_b = _bbox(param_text, font_param)
+        time_t, time_b = _bbox(time_text, font_time)
+        # 左侧两行整体高度（行间距不超过边框高度的 1/5）
+        left_gap = int(left_cfg["lens"]["y"] * scale) - int(left_cfg["camera"]["y"] * scale)
+        left_gap = min(left_gap, int(bar_h / 5))
+        left_top = cam_t
+        left_bottom = lens_b + left_gap
+        left_h = left_bottom - left_top
+        # 右侧两行整体高度（行间距不超过边框高度的 1/5）
+        right_gap = int(right_cfg["time"]["y"] * scale) - int(right_cfg["params"]["y"] * scale)
+        right_gap = min(right_gap, int(bar_h / 5))
+        right_top = param_t
+        right_bottom = time_b + right_gap
+        right_h = right_bottom - right_top
+        # 边框垂直中心
+        bar_center = h + bar_h // 2
+        # 左侧：以 camera 行 top 为基准，整体居中
+        left_base = bar_center - left_h // 2 - cam_t
+        cam_pos = (left_x + int(left_cfg["camera"]["x_offset"] * scale), left_base)
+        draw.text(cam_pos, cam_text, fill=tuple(colors["camera"]), font=font_cam,
+                  stroke_width=stroke_w, stroke_fill=stroke_c)
+        lens_pos = (left_x + int(left_cfg["lens"]["x_offset"] * scale), left_base + left_gap)
+        draw.text(lens_pos, lens_text, fill=tuple(colors["lens"]), font=font_len,
+                  stroke_width=stroke_w, stroke_fill=stroke_c)
+        # 右侧：以 params 行 top 为基准，整体居中
         param_w = draw.textlength(param_text, font=font_param)
         time_w = draw.textlength(time_text, font=font_time)
-        param_x = w + right_cfg["params"]["x_offset"] - param_w
-        time_x = w + right_cfg["time"]["x_offset"] - time_w
-        draw.text((param_x, base_y + right_cfg["params"]["y"]), param_text,
+        param_x = w + int(right_cfg["params"]["x_offset"] * scale) - param_w
+        time_x = w + int(right_cfg["time"]["x_offset"] * scale) - time_w
+        right_base = bar_center - right_h // 2 - param_t
+        draw.text((param_x, right_base), param_text,
                   fill=tuple(colors["params"]), font=font_param,
-                                    stroke_width=stroke_w, stroke_fill=stroke_c)
-        draw.text((time_x, base_y + right_cfg["time"]["y"]), time_text,
+                  stroke_width=stroke_w, stroke_fill=stroke_c)
+        draw.text((time_x, right_base + right_gap), time_text,
                   fill=tuple(colors["time"]), font=font_time,
                   stroke_width=stroke_w, stroke_fill=stroke_c)
         new_img.save(out_path, quality=95)

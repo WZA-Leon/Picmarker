@@ -1,7 +1,6 @@
-# ui_main.py
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, font as tkfont
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 try:
     RESAMPLE = Image.Resampling.LANCZOS
 except:
@@ -11,8 +10,9 @@ import threading
 from pathlib import Path
 import shutil
 import subprocess
+import hashlib
 
-from config import GUI_CFG, CAMERA_DB
+from config import GUI_CFG, CAMERA_DB, WM_CFG
 from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel, apply_exif_orientation
 from ui_watermark import WatermarkApp
 from progress_util import ProgressDialog
@@ -51,9 +51,11 @@ class PhotoWatermarkApp:
         self.simple_watermark_panel = None
         self._cached_preview_path = None  # 缓存上次生成的预览图路径
         self._cached_params = {}  # 缓存参数哈希
+        self._user_edits = {}  # 每张图片的用户修改参数
         self._init_ui()
         self.auto_refresh_preview()
         Path(self.output_path.get()).mkdir(parents=True, exist_ok=True)
+
     def _init_ui(self):
         style = ttk.Style()
         style.configure(".", font=(GUI_CFG["font_family"], GUI_CFG["font_size"]))
@@ -64,7 +66,7 @@ class PhotoWatermarkApp:
         main_container = ttk.Frame(self.root)
         main_container.pack(fill=tk.BOTH, expand=1)
 
-                # 顶部栏（仅占位，设置按钮已移至输出设置右侧）
+        # 顶部栏（仅占位，设置按钮已移至输出设置右侧）
         top_bar = ttk.Frame(main_container)
         top_bar.pack(fill=tk.X, pady=(2, 0))
         top_bar.columnconfigure(0, weight=1)
@@ -158,8 +160,6 @@ class PhotoWatermarkApp:
             return "break"
         self.checklist_canvas.bind("<MouseWheel>", _on_list_mousewheel, add="+")
         self.checklist_inner.bind("<MouseWheel>", _on_list_mousewheel, add="+")
-        # 单击列表项切换预览（绑定到 inner 上，使用 bind_class 捕获所有子控件）
-        # 改为在 _add_checklist_row 中为每个 Checkbutton 单独绑定
         # 存储复选框变量列表: list of (frame, tk.BooleanVar, filepath)
         self.check_vars = []
         panel_border = CollapsiblePanel(self.left_scroll_content, "添加边框", expanded=False)
@@ -303,7 +303,7 @@ class PhotoWatermarkApp:
 
     def _save_current_edits(self):
         #保存当前图片的用户修改
-        if self.current_index >= 0 and hasattr(self, '_user_edits'):
+        if self.current_index >= 0:
             self._user_edits[self.current_index] = {
                 "brand": self.brand_var.get().strip(),
                 "camera": self.camera_var.get().strip(),
@@ -344,11 +344,26 @@ class PhotoWatermarkApp:
         if not files:
             return
         added = 0
+        rejected = []
         for f in files:
             if f not in self.input_files:
+                # 检查长边比短边是否 > 3:1，超宽图剔除
+                try:
+                    with Image.open(f) as img:
+                        w, h = img.size
+                        if max(w, h) / min(w, h) > 3.0:
+                            rejected.append(os.path.basename(f))
+                            continue
+                except Exception:
+                    pass
                 self.input_files.append(f)
                 self._add_checklist_row(f)
                 added += 1
+        if rejected:
+            messagebox.showwarning(
+                "已剔除超宽图片",
+                f"以下 {len(rejected)} 张图片长宽比超过 3:1，不符合规范，已剔除：\n\n" + "\n".join(rejected)
+            )
         if added > 0:
             if self.current_index == -1:
                 self.current_index = 0
@@ -374,8 +389,21 @@ class PhotoWatermarkApp:
             frame, _, _ = self.check_vars.pop(idx)
             frame.destroy()
             del self.input_files[idx]
+            # 【修复】同步删除_user_edits对应条目
+            if idx in self._user_edits:
+                del self._user_edits[idx]
+        
+        # 【修复】重新映射_user_edits索引，保证与input_files一一对应
+        if self._user_edits:
+            new_edits = {}
+            sorted_old = sorted(self._user_edits.keys())
+            for new_idx, old_idx in enumerate(sorted_old):
+                new_edits[new_idx] = self._user_edits[old_idx]
+            self._user_edits = new_edits
+
         if not self.input_files:
             self.current_index = -1
+            self._user_edits.clear()
             self.canvas.delete("all")
             self.brand_var.set("")
             self.camera_var.set("")
@@ -410,6 +438,7 @@ class PhotoWatermarkApp:
         if self.input_files and messagebox.askyesno("确认清空", "确定要清空所有照片吗？"):
             self.input_files = []
             self.current_index = -1
+            self._user_edits.clear()
             for frame, _, _ in self.check_vars:
                 frame.destroy()
             self.check_vars.clear()
@@ -465,30 +494,29 @@ class PhotoWatermarkApp:
 
 
     def _on_checkbutton_click(self, event):
-        """Checkbutton 点击：切换勾选状态并切换预览"""
+        """Checkbutton 点击：切换预览并高亮，保留原生勾选切换逻辑"""
         widget = event.widget
         for i, (frame, var, path) in enumerate(self.check_vars):
             w = widget
             while w and w != self.checklist_inner:
                 if w == frame or w.master == frame:
-                    var.set(not var.get())
+                    # 【修复】移除手动var翻转，避免与原生行为冲突导致状态不变
                     if self.current_index >= 0:
                         self._save_current_edits()
                     self.current_index = i
                     self._update_preview_for_current()
                     self._highlight_checklist_row(i)
-                    return "break"
+                    return
                 w = w.master
 
     def _on_checklist_click(self, event):
         """单击行切换预览并高亮，不干涉复选框选中状态"""
         widget = event.widget
-        self.root.title(f"clicked: {type(widget).__name__}")
+        # 【修复】移除调试用的标题修改代码
         for i, (frame, var, path) in enumerate(self.check_vars):
             w = widget
             while w and w != self.checklist_inner:
                 if w == frame or w.master == frame:
-                    self.root.title(f"MATCH i={i}")
                     if self.current_index >= 0:
                         self._save_current_edits()
                     self.current_index = i
@@ -511,9 +539,6 @@ class PhotoWatermarkApp:
         path = self.input_files[self.current_index]
         filename = os.path.basename(path)
         # 保存当前用户修改，切换图片时恢复
-        if not hasattr(self, '_user_edits'):
-            self._user_edits = {}
-                # 先保存当前图片的用户修改
         if self.current_index in self._user_edits:
             edits = self._user_edits[self.current_index]
         else:
@@ -599,7 +624,6 @@ class PhotoWatermarkApp:
 
     def _get_preview_hash(self):
         """生成当前预览参数的确定性哈希值"""
-        import hashlib
         data = self.get_data()
         wm = self.simple_watermark_panel
         wm_text = wm.watermark_text.get() if wm else ""
@@ -659,16 +683,13 @@ class PhotoWatermarkApp:
 
                 # 2. 在缩略图上直接绘制边框水印（按比例缩放参数）
                 if self.enable_border.get():
-                    from PIL import ImageDraw
                     data = self.get_data()
                     font_name = self.selected_font.get()
                     tw, th = thumb.size
-                    # 计算原图→缩略图的比例（用宽度比，确保宽高比一致）
-                    with Image.open(img_path) as full_img:
-                        full_img = apply_exif_orientation(full_img)
-                        scale_ratio = tw / full_img.width
-                    from config import WM_CFG
-                    bar_h = int(WM_CFG["bar_height"] * scale_ratio)
+                    # 与 add_watermark 一致：以 base_width 为基准缩放
+                    scale_ratio = tw / WM_CFG["base_width"]
+                    bar_h = max(1, int(th * WM_CFG["bar_height_percent"] / 100))
+                    bar_h = min(bar_h, int(tw / 5))
                     bg = tuple(WM_CFG["background_color"])
                     bordered = Image.new("RGBA", (tw, th + bar_h), bg + (255,))
                     bordered.paste(thumb, (0, 0))
@@ -679,39 +700,60 @@ class PhotoWatermarkApp:
                     font_len = WatermarkGenerator.get_font(font_name, max(1, int(fc["lens"] * scale_ratio)))
                     font_param = WatermarkGenerator.get_font(font_name, max(1, int(fc["params"] * scale_ratio)))
                     font_time = WatermarkGenerator.get_font(font_name, max(1, int(fc["time"] * scale_ratio)))
-                     # 加载图标，与 add_watermark 一致：固定高度 icon_max_height，再按 scale_ratio 缩放
+                    # 加载图标，与 add_watermark 一致：固定高度 icon_max_height，再按 scale_ratio 缩放
                     icon = WatermarkGenerator.load_brand_icon(data["brand"])
                     icon_h = max(1, int(icon.height * scale_ratio))
                     icon = icon.resize((max(1, int(icon.width * scale_ratio)), icon_h), RESAMPLE)
+
+                    max_icon_w = int(tw / 5)
                     icon_left = int(WM_CFG["icon_margin_left"] * scale_ratio)
+                    if icon.width > max_icon_w:
+                        icon = icon.resize((max_icon_w, max(1, int(icon.height * max_icon_w / icon.width))), RESAMPLE)
                     icon_y = th + (bar_h - icon.height) // 2
                     bordered.paste(icon, (icon_left, icon_y), icon)
                     left_x = icon_left + icon.width + int(WM_CFG["icon_margin_right"] * scale_ratio)
-                    base_y = th + (bar_h // 2) - int(WM_CFG["vertical_center_offset"] * scale_ratio)
                     stroke_en = WM_CFG["stroke"]["enabled"]
                     stroke_w = int(WM_CFG["stroke"]["width"] * scale_ratio) if stroke_en else 0
                     stroke_c = tuple(WM_CFG["stroke"]["fill"]) if stroke_en else None
                     left_cfg = WM_CFG["left_text"]
-                    draw.text((left_x + int(left_cfg["camera"]["x_offset"] * scale_ratio),
-                               base_y + int(left_cfg["camera"]["y"] * scale_ratio)),
-                              data["camera"], fill=tuple(colors["camera"]), font=font_cam,
-                              stroke_width=stroke_w, stroke_fill=stroke_c)
-                    draw.text((left_x + int(left_cfg["lens"]["x_offset"] * scale_ratio),
-                               base_y + int(left_cfg["lens"]["y"] * scale_ratio)),
-                              data["lens"], fill=tuple(colors["lens"]), font=font_len,
-                              stroke_width=stroke_w, stroke_fill=stroke_c)
                     right_cfg = WM_CFG["right_text"]
+                    cam_text = data["camera"]
+                    lens_text = data["lens"]
                     param_text = f"{data['focal']}  {data['f']}  {data['exp']}  {data['iso']}"
                     time_text = f"{data['datetime']}"
+                    def _bbox(text, font):
+                        b = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_w)
+                        return b[1], b[3]
+                    cam_t, cam_b = _bbox(cam_text, font_cam)
+                    lens_t, lens_b = _bbox(lens_text, font_len)
+                    param_t, param_b = _bbox(param_text, font_param)
+                    time_t, time_b = _bbox(time_text, font_time)
+
+                    # 【修复】补充左边文本的间距和总高度计算，解决NameError
+                    left_gap = int(left_cfg["lens"]["y"] * scale_ratio) - int(left_cfg["camera"]["y"] * scale_ratio)
+                    left_h = (lens_b + left_gap) - cam_t
+                    # 右边文本间距和总高度
+                    right_gap = int(right_cfg["time"]["y"] * scale_ratio) - int(right_cfg["params"]["y"] * scale_ratio)
+                    right_h = (time_b + right_gap) - param_t
+
+                    bar_center = th + bar_h // 2
+                    left_base = bar_center - left_h // 2 - cam_t
+                    draw.text((left_x + int(left_cfg["camera"]["x_offset"] * scale_ratio), left_base),
+                              cam_text, fill=tuple(colors["camera"]), font=font_cam,
+                              stroke_width=stroke_w, stroke_fill=stroke_c)
+                    draw.text((left_x + int(left_cfg["lens"]["x_offset"] * scale_ratio), left_base + left_gap),
+                              lens_text, fill=tuple(colors["lens"]), font=font_len,
+                              stroke_width=stroke_w, stroke_fill=stroke_c)
                     param_w = draw.textlength(param_text, font=font_param)
                     time_w = draw.textlength(time_text, font=font_time)
-                    draw.text((tw + int(right_cfg["params"]["x_offset"] * scale_ratio) - param_w,
-                               base_y + int(right_cfg["params"]["y"] * scale_ratio)),
-                              param_text, fill=tuple(colors["params"]), font=font_param,
+                    param_x = tw + int(right_cfg["params"]["x_offset"] * scale_ratio) - param_w
+                    time_x = tw + int(right_cfg["time"]["x_offset"] * scale_ratio) - time_w
+                    right_base = bar_center - right_h // 2 - param_t
+                    draw.text((param_x, right_base), param_text,
+                              fill=tuple(colors["params"]), font=font_param,
                               stroke_width=stroke_w, stroke_fill=stroke_c)
-                    draw.text((tw + int(right_cfg["time"]["x_offset"] * scale_ratio) - time_w,
-                               base_y + int(right_cfg["time"]["y"] * scale_ratio)),
-                              time_text, fill=tuple(colors["time"]), font=font_time,
+                    draw.text((time_x, right_base + right_gap), time_text,
+                              fill=tuple(colors["time"]), font=font_time,
                               stroke_width=stroke_w, stroke_fill=stroke_c)
                     thumb = bordered
                 dlg.set_progress(2)
@@ -746,13 +788,12 @@ class PhotoWatermarkApp:
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
             return
-        # 获取所有勾选的图片
+        # 获取所有勾选的图片索引
         checked_indices = [i for i, (_, var, _) in enumerate(self.check_vars) if var.get()]
         if not checked_indices:
             messagebox.showwarning("提示", "请先勾选要处理的图片")
             return
-        checked_files = [self.input_files[i] for i in checked_indices]
-        if not messagebox.askyesno("确认处理", f"将处理 {len(checked_files)} 张照片，是否继续？"):
+        if not messagebox.askyesno("确认处理", f"将处理 {len(checked_indices)} 张照片，是否继续？"):
             return
         # 检查是否有任何功能启用
         has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
@@ -761,14 +802,16 @@ class PhotoWatermarkApp:
             return
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
-        total = len(checked_files)
+        total = len(checked_indices)
         dlg = ProgressDialog(self.root, "处理...", maximum=total)
         dlg.set_text(f"正在处理 0/{total}")
         self.root.update()    
         def worker():
             success = 0
             is_extract = self.hidden_mode.get() == "extract" and self.enable_hidden.get()
-            for i, f in enumerate(checked_files):
+            # 【修复】遍历索引，每张图片使用自身的参数
+            for idx_in_list, file_idx in enumerate(checked_indices):
+                f = self.input_files[file_idx]
                 name = os.path.basename(f)
                 out = os.path.join(self.output_path.get(), f"Watermark_{name}")
                 try:
@@ -782,19 +825,23 @@ class PhotoWatermarkApp:
                         print(result_text)
                         self.root.after(0, lambda r=result_text: messagebox.showinfo("提取结果", r))
                     else:
-                        info = ExifReader.get_exif_full(f)
-                        data = {
-                            "brand": info.get("make", ""),
-                            "camera": info.get("camera_model", ""),
-                            "lens": info.get("lens_model", ""),
-                            "photo_name": "",
-                            "focal": info.get("focal", ""),
-                            "f": info.get("f", ""),
-                            "exp": info.get("exposure", ""),
-                            "iso": info.get("iso", ""),
-                            "datetime": info.get("datetime", ""),
-                            "location": ""
-                        }
+                        # 获取当前图片的专属参数
+                        if file_idx in self._user_edits:
+                            data = self._user_edits[file_idx]
+                        else:
+                            info = ExifReader.get_exif_full(f)
+                            data = {
+                                "brand": info.get("make", ""),
+                                "camera": info.get("camera_model", ""),
+                                "lens": info.get("lens_model", ""),
+                                "focal": info.get("focal", ""),
+                                "f": info.get("f", ""),
+                                "exp": info.get("exposure", ""),
+                                "iso": info.get("iso", ""),
+                                "datetime": info.get("datetime", ""),
+                                "location": "",
+                                "photo_name": ""
+                            }
                         if self.enable_border.get():
                             WatermarkGenerator.add_watermark(f, out, data, font)
                         else:
@@ -815,7 +862,7 @@ class PhotoWatermarkApp:
                                     piexif.insert(exif_bytes, out)
                                 except:
                                     pass
-                        # 隐形水印嵌入
+                                                # 隐形水印嵌入
                         if self.enable_hidden.get():
                             try:
                                 pwd = self.hidden_pwd.get().strip()
@@ -826,11 +873,11 @@ class PhotoWatermarkApp:
                                     bw.embed(out, text, out)
                             except Exception as e:
                                 print(f"隐形水印嵌入失败 {name}: {e}")
-                                success += 1
+                        success += 1
                 except Exception as e:
                     print(f"处理失败 {name}: {e}")
-                self.root.after(0, lambda v=i+1: dlg.set_progress(v))
-                self.root.after(0, lambda v=f"{i+1}/{total}": dlg.set_text(f"正在处理 {v}"))
+                self.root.after(0, lambda v=idx_in_list+1: dlg.set_progress(v))
+                self.root.after(0, lambda v=f"{idx_in_list+1}/{total}": dlg.set_text(f"正在处理 {v}"))
             self.root.after(0, dlg.close)
             if not is_extract:
                 self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))

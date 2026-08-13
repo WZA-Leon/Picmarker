@@ -13,12 +13,12 @@ DEFAULT_SETTINGS = {
         "preview_auto_refresh": True,
     },
     "watermark": {
-        "bar_height": 280,
+        "bar_height_percent": 15,
+        "base_height": 2000,
+        "base_width": 3000,
         "background_color": [255, 255, 255],
-        "icon_max_height": 140,
         "icon_margin_left": 40,
         "icon_margin_right": 40,
-        "vertical_center_offset": 30,
                 "left_text": {
             "camera": {"x_offset": 0, "y": -55},
             "lens": {"x_offset": 0, "y": 10},
@@ -29,11 +29,11 @@ DEFAULT_SETTINGS = {
             "time": {"x_offset": -40, "y": 10}
         },
         "fonts": {
-            "camera": 56,
-            "lens": 44,
-            "name": 48,
-            "params": 56,
-            "time": 44
+            "camera": 44,
+            "lens": 34,
+            "name": 38,
+            "params": 44,
+            "time": 34
         },
         "colors": {
             "camera": [0, 0, 0],

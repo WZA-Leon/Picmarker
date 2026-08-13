@@ -16,7 +16,7 @@
     "icon_max_height": 140,
     "icon_margin_left": 30,
     "icon_margin_right": 30,
-    "vertical_center_offset": 40,
+    "vertical_center_offset": 0,
     "left_text": {
       "camera": {
         "x_offset": 0,
@@ -38,11 +38,11 @@
       }
     },
     "fonts": {
-      "camera": 60,
-      "lens": 46,
-      "name": 50,
-      "params": 60,
-      "time": 46
+      "camera": 40,
+      "lens": 30,
+      "name": 34,
+      "params": 40,
+      "time": 30
     },
     "colors": {
       "camera": [
