@@ -59,7 +59,7 @@ class SettingsWindow:
         scroll_frame.bind("<MouseWheel>", _on_mousewheel)
 
         # 加载Logo（放在所有介绍文字最上面）
-        logo_path = Path(__file__).parent / "icons" / "test.jpg"
+        logo_path = Path(__file__).parent / "icons" / "icon.png"
         # ==========修复缩进：if 顶格和logo_path同一层级==========
         if logo_path.exists():
             img = Image.open(logo_path)
@@ -74,7 +74,7 @@ class SettingsWindow:
             logo_label = ttk.Label(scroll_frame, image=self.logo_img)
             logo_label.pack(fill=tk.X, pady=(0, 15))
         else:
-            ttk.Label(scroll_frame, text="[Logo 图片缺失：icons/test.jpg]", font=("Microsoft YaHei", 24)).pack(pady=(0, 15))
+            ttk.Label(scroll_frame, text="[Logo 图片缺失：icons/icon.png]", font=("Microsoft YaHei", 24)).pack(pady=(0, 15))
 
         intro_lines = [
             ("title", "Picmarker V1.3 - 专业图片水印工具"),

@@ -169,11 +169,11 @@ class PhotoWatermarkApp:
         
         #循环创建行
         rows = []
-        for i in range(8):
+        for i in range(10):
             row = ttk.Frame(param_frame)
             row.pack(fill=tk.X, padx=8, pady=4)
             rows.append(row)
-        row1, row2, row3, row4, row5, row6, row7, row8 = rows
+        row1, row2, row3, row4, row5, row6, row7, row8, row9, row10 = rows
 
         #粘贴左侧明文水印的功能到行里
         ttk.Label(row1, text="品牌：", width=6).pack(side=tk.LEFT)
@@ -200,19 +200,142 @@ class PhotoWatermarkApp:
         self.cbo_len.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_len.pack(side=tk.LEFT)
         ttk.Label(row4, text="焦距：", width=6).pack(side=tk.LEFT)
-        self.ent_focal = ttk.Entry(row4, textvariable=self.focal_var, width=20, state="readonly")
-        self.ent_focal.pack(side=tk.LEFT, padx=(0, 10))
+        self.cbo_focal = ttk.Entry(row4, textvariable=self.focal_var, width=20)
+        self.cbo_focal.pack(side=tk.LEFT, padx=(0, 10))
+        self.cbo_focal.bind("<FocusOut>", self._on_focal_focusout)
+        self.cbo_focal.bind("<KeyRelease>", self._on_focal_key)
         ttk.Label(row5, text="光圈：", width=6).pack(side=tk.LEFT)
-        self.ent_f = ttk.Entry(row5, textvariable=self.f_var, width=20, state="readonly")
-        self.ent_f.pack(side=tk.LEFT, padx=(0, 10))
+        self.cbo_f = ttk.Combobox(row5, textvariable=self.f_var, width=20, state="readonly",
+                                  values = [
+                                    "",
+                                    "f/1.0", "f/1.1", "f/1.2",
+                                    "f/1.4", "f/1.6", "f/1.8",
+                                    "f/2", "f/2.2", "f/2.5",
+                                    "f/2.8", "f/3.2", "f/3.5",
+                                    "f/4", "f/4.5", "f/5",
+                                    "f/5.6", "f/6.3", "f/7.1",
+                                    "f/8", "f/9", "f/10",
+                                    "f/11", "f/13", "f/14",
+                                    "f/16", "f/18", "f/20",
+                                    "f/22", "f/25", "f/29",
+                                    "f/32", "f/36", "f/40",
+                                    "f/45", "f/50", "f/57",
+                                    "f/64"
+                                ])
+        self.cbo_f.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_f.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_f.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_f.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
+        self.cbo_f.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row6, text="快门：", width=6).pack(side=tk.LEFT)
-        self.ent_exp = ttk.Entry(row6, textvariable=self.exp_var, width=20, state="readonly")
-        self.ent_exp.pack(side=tk.LEFT, padx=(0, 10))
+        self.cbo_exp = ttk.Combobox(row6, textvariable=self.exp_var, width=20, state="readonly",
+                                    values = [
+                                        "",
+                                        "1/8000s", "1/6400s", "1/5000s",
+                                        "1/4000s", "1/3200s", "1/2500s",
+                                        "1/2000s", "1/1600s", "1/1250s",
+                                        "1/1000s", "1/800s", "1/640s",
+                                        "1/500s", "1/400s", "1/320s",
+                                        "1/250s", "1/200s", "1/160s",
+                                        "1/125s", "1/100s", "1/80s",
+                                        "1/60s", "1/50s", "1/40s",
+                                        "1/30s", "1/25s", "1/20s",
+                                        "1/15s", "1/13s", "1/10s",
+                                        "1/8s", "1/6s", "1/5s",
+                                        "1/4s", "1/3s", "1/2.5s",
+                                        "1/2s", "1/1.6s", "1/1.3s",
+                                        "1s", "1.3s", "1.6s",
+                                        "2s", "2.5s", "3.2s",
+                                        "4s", "5s", "6.3s",
+                                        "8s", "10s", "13s",
+                                        "16s", "20s", "25s",
+                                        "30s"
+                                    ])
+        self.cbo_exp.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_exp.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_exp.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_exp.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
+        self.cbo_exp.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row7, text="ISO：", width=6).pack(side=tk.LEFT)
-        self.ent_iso = ttk.Entry(row7, textvariable=self.iso_var, width=20, state="readonly")
-        self.ent_iso.pack(side=tk.LEFT)
-        ttk.Label(row8, text="字体：", width=6).pack(side=tk.LEFT)
-        self.font_cb = ttk.Combobox(row8, textvariable=self.selected_font,values=self.font_list, width=20, state="readonly")
+        self.cbo_iso = ttk.Combobox(row7, textvariable=self.iso_var, width=20, state="readonly",
+                                    values = [
+                                "", 
+                                "ISO50", "ISO64", "ISO80", 
+                                "ISO100", "ISO125", "ISO160", 
+                                "ISO200", "ISO250", "ISO320", 
+                                "ISO400", "ISO500", "ISO640", 
+                                "ISO800", "ISO1000", "ISO1250", 
+                                "ISO1600", "ISO2000", "ISO2500", 
+                                "ISO3200", "ISO4000", "ISO5000", 
+                                "ISO6400", "ISO8000", "ISO10000", 
+                                "ISO12800", "ISO16000", "ISO20000", 
+                                "ISO25600", "ISO32000", "ISO40000", 
+                                "ISO51200", "ISO64000", "ISO80000", 
+                                "ISO102400", "ISO128000", "ISO204800"
+                            ])
+        self.cbo_iso.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_iso.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_iso.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_iso.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
+        self.cbo_iso.pack(side=tk.LEFT)
+        ttk.Label(row8, text="时间：", width=6).pack(side=tk.LEFT)
+        self.time_year = tk.StringVar()
+        self.time_month = tk.StringVar()
+        self.time_day = tk.StringVar()
+        self.cbo_time_y = ttk.Combobox(row8, textvariable=self.time_year, width=6, state="readonly",
+                                       values=[""] + [str(y) for y in range(1839,2078)])
+        self.cbo_time_y.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_time_y.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_time_y.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_time_y.bind("<<ComboboxSelected>>", self._on_time_change)
+        self.cbo_time_y.pack(side=tk.LEFT)
+        ttk.Label(row8, text="年", width=2).pack(side=tk.LEFT)
+        self.cbo_time_m = ttk.Combobox(row8, textvariable=self.time_month, width=4, state="readonly",
+                                       values=[""] + [f"{m:02d}" for m in range(1, 13)])
+        self.cbo_time_m.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_time_m.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_time_m.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_time_m.bind("<<ComboboxSelected>>", self._on_time_change)
+        self.cbo_time_m.pack(side=tk.LEFT)
+        ttk.Label(row8, text="月", width=2).pack(side=tk.LEFT)
+        self.cbo_time_d = ttk.Combobox(row8, textvariable=self.time_day, width=4, state="readonly",
+                                       values=[""] + [f"{d:02d}" for d in range(1, 32)])
+        self.cbo_time_d.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_time_d.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_time_d.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_time_d.bind("<<ComboboxSelected>>", self._on_time_change)
+        self.cbo_time_d.pack(side=tk.LEFT)
+        ttk.Label(row8, text="日", width=2).pack(side=tk.LEFT)
+        self.time_hour = tk.StringVar()
+        self.time_min = tk.StringVar()
+        self.time_sec = tk.StringVar()
+        ttk.Label(row9, text="", width=6).pack(side=tk.LEFT)
+        self.cbo_time_h = ttk.Combobox(row9, textvariable=self.time_hour, width=4, state="readonly",
+                                       values=[""] + [f"{h:02d}" for h in range(0, 24)])
+        self.cbo_time_h.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_time_h.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_time_h.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_time_h.bind("<<ComboboxSelected>>", self._on_time_change)
+        self.cbo_time_h.pack(side=tk.LEFT)
+        ttk.Label(row9, text="时", width=2).pack(side=tk.LEFT)
+        self.cbo_time_min = ttk.Combobox(row9, textvariable=self.time_min, width=4, state="readonly",
+                                         values=[""] + [f"{mi:02d}" for mi in range(0, 60)])
+        self.cbo_time_min.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_time_min.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_time_min.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_time_min.bind("<<ComboboxSelected>>", self._on_time_change)
+        self.cbo_time_min.pack(side=tk.LEFT)
+        ttk.Label(row9, text="分", width=2).pack(side=tk.LEFT)
+        self.cbo_time_s = ttk.Combobox(row9, textvariable=self.time_sec, width=4, state="readonly",
+                                       values=[""] + [f"{s:02d}" for s in range(0, 60)])
+        self.cbo_time_s.bind("<MouseWheel>", lambda e: "break", add="+")
+        self.cbo_time_s.bind("<Button-4>", lambda e: "break", add="+")
+        self.cbo_time_s.bind("<Button-5>", lambda e: "break", add="+")
+        self.cbo_time_s.bind("<<ComboboxSelected>>", self._on_time_change)
+        self.cbo_time_s.pack(side=tk.LEFT)
+        ttk.Label(row9, text="秒", width=2).pack(side=tk.LEFT)
+        ttk.Label(row10, text="字体：", width=6).pack(side=tk.LEFT)
+        self.font_cb = ttk.Combobox(row10, textvariable=self.selected_font,values=self.font_list, width=20, state="readonly")
         self.font_cb.bind("<MouseWheel>", lambda e: "break", add="+")
         self.font_cb.bind("<Button-4>", lambda e: "break", add="+")
         self.font_cb.bind("<Button-5>", lambda e: "break", add="+")
@@ -418,10 +541,16 @@ class PhotoWatermarkApp:
             self.cbo_brand.config(state="readonly")
             self.cbo_cam.config(state="readonly")
             self.cbo_len.config(state="readonly")
-            self.ent_focal.config(state="normal")
-            self.ent_f.config(state="normal")
-            self.ent_exp.config(state="normal")
-            self.ent_iso.config(state="normal")
+            self.cbo_focal.config(state="normal")
+            self.cbo_f.config(state="normal")
+            self.cbo_exp.config(state="normal")
+            self.cbo_iso.config(state="normal")
+            self.cbo_time_y.config(state="readonly")
+            self.cbo_time_m.config(state="readonly")
+            self.cbo_time_d.config(state="readonly")
+            self.cbo_time_h.config(state="readonly")
+            self.cbo_time_min.config(state="readonly")
+            self.cbo_time_s.config(state="readonly")
         else:
             if self.current_index >= len(self.input_files):
                 self.current_index = len(self.input_files) - 1
@@ -456,10 +585,11 @@ class PhotoWatermarkApp:
             self.cbo_brand.config(state="readonly")
             self.cbo_cam.config(state="readonly")
             self.cbo_len.config(state="readonly")
-            self.ent_focal.config(state="normal")
-            self.ent_f.config(state="normal")
-            self.ent_exp.config(state="normal")
-            self.ent_iso.config(state="normal")
+            self.cbo_focal.config(state="normal")
+            self.cbo_f.config(state="normal")
+            self.cbo_exp.config(state="normal")
+            self.cbo_iso.config(state="normal")
+            self.cbo_time.config(state="normal")
     
     def _update_checklist_scrollregion(self):
         """强制更新图片列表 Canvas 的滚动区域"""
@@ -562,12 +692,21 @@ class PhotoWatermarkApp:
         self.cbo_brand.config(state=state)
         self.cbo_cam.config(state=state)
         self.cbo_len.config(state=state)
-        # 焦距/光圈/快门/ISO：EXIF 存在时禁用，否则允许编辑
-        for ent, val in ((self.ent_focal, edits.get("focal")),
-                         (self.ent_f, edits.get("f")),
-                         (self.ent_exp, edits.get("exp")),
-                         (self.ent_iso, edits.get("iso"))):
-            ent.config(state="disabled" if val else "normal")
+        # 焦距：EXIF 存在时禁用，否则允许输入
+        self.cbo_focal.config(state="disabled" if edits.get("focal") else "normal")
+        # 光圈/快门/ISO：EXIF 存在时禁用，否则允许选择
+        for cbo, val in ((self.cbo_f, edits.get("f")),
+                         (self.cbo_exp, edits.get("exp")),
+                         (self.cbo_iso, edits.get("iso"))):
+            cbo.config(state="disabled" if val else "readonly")
+        # 时间：EXIF 存在时禁用年月日时分秒下拉，否则允许选择
+        time_state = "disabled" if edits.get("datetime") else "readonly"
+        self.cbo_time_y.config(state=time_state)
+        self.cbo_time_m.config(state=time_state)
+        self.cbo_time_d.config(state=time_state)
+        self.cbo_time_h.config(state=time_state)
+        self.cbo_time_min.config(state=time_state)
+        self.cbo_time_s.config(state=time_state)
         self.brand_var.set(edits["brand"])
         self.on_brand_change()
         self.camera_var.set(edits["camera"])
@@ -576,7 +715,7 @@ class PhotoWatermarkApp:
         self.f_var.set(edits["f"])
         self.exp_var.set(edits["exp"])
         self.iso_var.set(edits["iso"])
-        self.time_var.set(edits["datetime"])
+        self._set_time_parts(edits["datetime"])
         self.loc_var.set(edits["location"])
         self.photo_name_var.set(edits["photo_name"])
         self.root.after(100, self.show_preview)
@@ -587,6 +726,60 @@ class PhotoWatermarkApp:
             lens = CAMERA_DB[brand].get("lenses", [])
             self.cbo_cam.config(values=cams)
             self.cbo_len.config(values=lens)
+
+    def _on_focal_key(self, event=None):
+        """焦距输入：只允许数字和连字符"""
+        val = self.focal_var.get()
+        # 移除非法字符
+        cleaned = "".join(c for c in val if c.isdigit() or c == "-")
+        if cleaned != val:
+            self.focal_var.set(cleaned)
+
+    def _on_focal_focusout(self, event=None):
+        """焦距失焦：自动补 mm，空则不补"""
+        val = self.focal_var.get().strip()
+        if val and not val.endswith("mm"):
+            self.focal_var.set(f"{val}mm")
+        self.show_preview()
+
+    def _on_time_change(self, event=None):
+        """年月日时分秒组合成时间字符串"""
+        y = self.time_year.get().strip()
+        m = self.time_month.get().strip()
+        d = self.time_day.get().strip()
+        h = self.time_hour.get().strip()
+        mi = self.time_min.get().strip()
+        s = self.time_sec.get().strip()
+        if y and m and d:
+            base = f"{y}-{m}-{d}"
+            if h and mi and s:
+                self.time_var.set(f"{base} {h}:{mi}:{s}")
+            else:
+                self.time_var.set(base)
+        else:
+            self.time_var.set("")
+        self.show_preview()
+
+    def _set_time_parts(self, dt):
+        """把时间字符串拆分到年月日时分秒下拉框"""
+        self.time_year.set("")
+        self.time_month.set("")
+        self.time_day.set("")
+        self.time_hour.set("")
+        self.time_min.set("")
+        self.time_sec.set("")
+        if dt:
+            parts = str(dt).replace("T", " ").split()
+            date_part = parts[0].split("-") if parts else []
+            time_part = parts[1].split(":") if len(parts) > 1 else []
+            if len(date_part) >= 3:
+                self.time_year.set(date_part[0])
+                self.time_month.set(date_part[1])
+                self.time_day.set(date_part[2])
+            if len(time_part) >= 3:
+                self.time_hour.set(time_part[0])
+                self.time_min.set(time_part[1])
+                self.time_sec.set(time_part[2])
     def select_out_dir(self):
         d = filedialog.askdirectory(title="选择输出文件夹")
         if d:
@@ -673,92 +866,31 @@ class PhotoWatermarkApp:
                 dlg = ProgressDialog(self.root, "生成预览...", maximum=4)
                 dlg.set_text("正在渲染预览图")
                 self.root.update()
-                # 1. 打开原图缩略到预览尺寸
+                                # 1. 打开原图，缩放到适配画布的预览尺寸
                 with Image.open(img_path) as full_img:
                     full_img = apply_exif_orientation(full_img)
-                    scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
+                    # 预留边框高度空间，避免边框文字超出画布底部
+                    if self.enable_border.get():
+                        est_scale = (cw-20) / full_img.width
+                        est_bar_h = int(WM_CFG["base_bar_height"] * est_scale)
+                        est_bar_h = max(20, min(est_bar_h, int((cw-20)/5)))
+                        scale = min((cw-20)/full_img.width, (ch-20-est_bar_h)/full_img.height, 1.0)
+                    else:
+                        scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
                     thumb_size = (int(full_img.width*scale), int(full_img.height*scale))
                     thumb = full_img.resize(thumb_size, RESAMPLE).convert("RGBA")
                 dlg.set_progress(1)
 
-                # 2. 在缩略图上直接绘制边框水印（按比例缩放参数）
+                # 2. 调用统一核心方法渲染边框水印（与正式生成算法100%一致）
                 if self.enable_border.get():
                     data = self.get_data()
                     font_name = self.selected_font.get()
-                    tw, th = thumb.size
-                    # 与 add_watermark 一致：以 base_width 为基准缩放
-                    scale_ratio = tw / WM_CFG["base_width"]
-                    bar_h = max(1, int(th * WM_CFG["bar_height_percent"] / 100))
-                    bar_h = min(bar_h, int(tw / 5))
-                    bg = tuple(WM_CFG["background_color"])
-                    bordered = Image.new("RGBA", (tw, th + bar_h), bg + (255,))
-                    bordered.paste(thumb, (0, 0))
-                    draw = ImageDraw.Draw(bordered)
-                    fc = WM_CFG["fonts"]
-                    colors = WM_CFG["colors"]
-                    font_cam = WatermarkGenerator.get_font(font_name, max(1, int(fc["camera"] * scale_ratio)))
-                    font_len = WatermarkGenerator.get_font(font_name, max(1, int(fc["lens"] * scale_ratio)))
-                    font_param = WatermarkGenerator.get_font(font_name, max(1, int(fc["params"] * scale_ratio)))
-                    font_time = WatermarkGenerator.get_font(font_name, max(1, int(fc["time"] * scale_ratio)))
-                    # 加载图标，与 add_watermark 一致：固定高度 icon_max_height，再按 scale_ratio 缩放
-                    icon = WatermarkGenerator.load_brand_icon(data["brand"])
-                    icon_h = max(1, int(icon.height * scale_ratio))
-                    icon = icon.resize((max(1, int(icon.width * scale_ratio)), icon_h), RESAMPLE)
-
-                    max_icon_w = int(tw / 5)
-                    icon_left = int(WM_CFG["icon_margin_left"] * scale_ratio)
-                    if icon.width > max_icon_w:
-                        icon = icon.resize((max_icon_w, max(1, int(icon.height * max_icon_w / icon.width))), RESAMPLE)
-                    icon_y = th + (bar_h - icon.height) // 2
-                    bordered.paste(icon, (icon_left, icon_y), icon)
-                    left_x = icon_left + icon.width + int(WM_CFG["icon_margin_right"] * scale_ratio)
-                    stroke_en = WM_CFG["stroke"]["enabled"]
-                    stroke_w = int(WM_CFG["stroke"]["width"] * scale_ratio) if stroke_en else 0
-                    stroke_c = tuple(WM_CFG["stroke"]["fill"]) if stroke_en else None
-                    left_cfg = WM_CFG["left_text"]
-                    right_cfg = WM_CFG["right_text"]
-                    cam_text = data["camera"]
-                    lens_text = data["lens"]
-                    param_text = f"{data['focal']}  {data['f']}  {data['exp']}  {data['iso']}"
-                    time_text = f"{data['datetime']}"
-                    def _bbox(text, font):
-                        b = draw.textbbox((0, 0), text, font=font, stroke_width=stroke_w)
-                        return b[1], b[3]
-                    cam_t, cam_b = _bbox(cam_text, font_cam)
-                    lens_t, lens_b = _bbox(lens_text, font_len)
-                    param_t, param_b = _bbox(param_text, font_param)
-                    time_t, time_b = _bbox(time_text, font_time)
-
-                    # 【修复】补充左边文本的间距和总高度计算，解决NameError
-                    left_gap = int(left_cfg["lens"]["y"] * scale_ratio) - int(left_cfg["camera"]["y"] * scale_ratio)
-                    left_h = (lens_b + left_gap) - cam_t
-                    # 右边文本间距和总高度
-                    right_gap = int(right_cfg["time"]["y"] * scale_ratio) - int(right_cfg["params"]["y"] * scale_ratio)
-                    right_h = (time_b + right_gap) - param_t
-
-                    bar_center = th + bar_h // 2
-                    left_base = bar_center - left_h // 2 - cam_t
-                    draw.text((left_x + int(left_cfg["camera"]["x_offset"] * scale_ratio), left_base),
-                              cam_text, fill=tuple(colors["camera"]), font=font_cam,
-                              stroke_width=stroke_w, stroke_fill=stroke_c)
-                    draw.text((left_x + int(left_cfg["lens"]["x_offset"] * scale_ratio), left_base + left_gap),
-                              lens_text, fill=tuple(colors["lens"]), font=font_len,
-                              stroke_width=stroke_w, stroke_fill=stroke_c)
-                    param_w = draw.textlength(param_text, font=font_param)
-                    time_w = draw.textlength(time_text, font=font_time)
-                    param_x = tw + int(right_cfg["params"]["x_offset"] * scale_ratio) - param_w
-                    time_x = tw + int(right_cfg["time"]["x_offset"] * scale_ratio) - time_w
-                    right_base = bar_center - right_h // 2 - param_t
-                    draw.text((param_x, right_base), param_text,
-                              fill=tuple(colors["params"]), font=font_param,
-                              stroke_width=stroke_w, stroke_fill=stroke_c)
-                    draw.text((time_x, right_base + right_gap), time_text,
-                              fill=tuple(colors["time"]), font=font_time,
-                              stroke_width=stroke_w, stroke_fill=stroke_c)
-                    thumb = bordered
+                    # 核心：直接复用 render_border，无需手动计算缩放
+                    bordered = WatermarkGenerator.render_border(thumb, data, font_name)
+                    thumb = bordered.convert("RGBA")
                 dlg.set_progress(2)
 
-                # 3. 在缩略图上叠加明文水印
+                # 3. 叠加明文水印（保留原有逻辑）
                 if self.enable_watermark.get() and self.simple_watermark_panel:
                     wm = self.simple_watermark_panel
                     if wm.watermark_text.get().strip():
@@ -769,7 +901,7 @@ class PhotoWatermarkApp:
                         thumb = Image.alpha_composite(thumb, overlay)
                 dlg.set_progress(3)
 
-                # 4. 保存预览缩略图到缓存（使用参数哈希，避免覆盖后台缓存）
+                # 4. 保存预览缓存
                 tmp_thumb = temp_dir / f"_preview_{cur_hash}.jpg"
                 thumb.convert("RGB").save(tmp_thumb, quality=85)
                 self._cached_preview_path = tmp_thumb
@@ -777,6 +909,7 @@ class PhotoWatermarkApp:
                 im = Image.open(tmp_thumb)
                 dlg.set_progress(4)
                 dlg.close()
+
             self.preview_img = ImageTk.PhotoImage(im)
             self.canvas.delete("all")
             self.canvas.create_image(cw//2, ch//2, image=self.preview_img, anchor=tk.CENTER)
@@ -802,6 +935,8 @@ class PhotoWatermarkApp:
             return
         os.makedirs(self.output_path.get(), exist_ok=True)
         font = self.selected_font.get()
+        # 【修复】处理前保存当前图片的用户修改，确保手动填写的参数生效
+        self._save_current_edits()
         total = len(checked_indices)
         dlg = ProgressDialog(self.root, "处理...", maximum=total)
         dlg.set_text(f"正在处理 0/{total}")
