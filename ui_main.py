@@ -427,6 +427,7 @@ class PhotoWatermarkApp:
     def _save_current_edits(self):
         #保存当前图片的用户修改
         if self.current_index >= 0:
+            old = self._user_edits.get(self.current_index, {})
             self._user_edits[self.current_index] = {
                 "brand": self.brand_var.get().strip(),
                 "camera": self.camera_var.get().strip(),
@@ -437,7 +438,8 @@ class PhotoWatermarkApp:
                 "iso": self.iso_var.get().strip(),
                 "datetime": self.time_var.get().strip(),
                 "location": self.loc_var.get().strip(),
-                "photo_name": self.photo_name_var.get().strip()
+                "photo_name": self.photo_name_var.get().strip(),
+                "_has_exif": old.get("_has_exif", False)
             }
 
     def prev_image(self):
@@ -488,9 +490,10 @@ class PhotoWatermarkApp:
                 f"以下 {len(rejected)} 张图片长宽比超过 3:1，不符合规范，已剔除：\n\n" + "\n".join(rejected)
             )
         if added > 0:
-            if self.current_index == -1:
-                self.current_index = 0
-                self._update_preview_for_current()
+            # 自动选择最后导入的图片
+            self.current_index = len(self.input_files) - 1
+            self._update_preview_for_current()
+            self._highlight_checklist_row(self.current_index)
             # 后台生成所有图片的缩略图缓存
             threading.Thread(target=self._precache_all_thumbnails, daemon=True).start()
     def delete_selected(self):
@@ -683,30 +686,28 @@ class PhotoWatermarkApp:
                 "iso": info.get("iso", ""),
                 "datetime": info.get("datetime", ""),
                 "location": "",
-                "photo_name": ""
+                "photo_name": "",
+                "_has_exif": bool(info.get("camera_model") or info.get("lens_model"))
             }
             self._user_edits[self.current_index] = edits
-                # 存在相机/镜头 EXIF 时禁用自定义选择，否则允许自定义
-        has_exif = bool(edits.get("camera") or edits.get("lens"))
+        # 存在相机/镜头 EXIF 时禁用自定义选择，否则允许自定义
+        has_exif = edits.get("_has_exif", False)
         state = "disabled" if has_exif else "readonly"
         self.cbo_brand.config(state=state)
         self.cbo_cam.config(state=state)
         self.cbo_len.config(state=state)
         # 焦距：EXIF 存在时禁用，否则允许输入
-        self.cbo_focal.config(state="disabled" if edits.get("focal") else "normal")
+        self.cbo_focal.config(state="disabled" if has_exif else "normal")
         # 光圈/快门/ISO：EXIF 存在时禁用，否则允许选择
-        for cbo, val in ((self.cbo_f, edits.get("f")),
-                         (self.cbo_exp, edits.get("exp")),
-                         (self.cbo_iso, edits.get("iso"))):
-            cbo.config(state="disabled" if val else "readonly")
-        # 时间：EXIF 存在时禁用年月日时分秒下拉，否则允许选择
-        time_state = "disabled" if edits.get("datetime") else "readonly"
-        self.cbo_time_y.config(state=time_state)
-        self.cbo_time_m.config(state=time_state)
-        self.cbo_time_d.config(state=time_state)
-        self.cbo_time_h.config(state=time_state)
-        self.cbo_time_min.config(state=time_state)
-        self.cbo_time_s.config(state=time_state)
+        for cbo in (self.cbo_f, self.cbo_exp, self.cbo_iso):
+            cbo.config(state="disabled" if has_exif else "readonly")
+        # 时间：始终允许用户修改年月日时分秒
+        self.cbo_time_y.config(state="readonly")
+        self.cbo_time_m.config(state="readonly")
+        self.cbo_time_d.config(state="readonly")
+        self.cbo_time_h.config(state="readonly")
+        self.cbo_time_min.config(state="readonly")
+        self.cbo_time_s.config(state="readonly")
         self.brand_var.set(edits["brand"])
         self.on_brand_change()
         self.camera_var.set(edits["camera"])
@@ -758,6 +759,9 @@ class PhotoWatermarkApp:
                 self.time_var.set(base)
         else:
             self.time_var.set("")
+        # 同步保存到当前图片的用户修改
+        if self.current_index in self._user_edits:
+            self._user_edits[self.current_index]["datetime"] = self.time_var.get().strip()
         self.show_preview()
 
     def _set_time_parts(self, dt):
@@ -780,6 +784,8 @@ class PhotoWatermarkApp:
                 self.time_hour.set(time_part[0])
                 self.time_min.set(time_part[1])
                 self.time_sec.set(time_part[2])
+            # 同步设置完整时间字符串，供水印渲染使用
+            self.time_var.set(str(dt).strip())
     def select_out_dir(self):
         d = filedialog.askdirectory(title="选择输出文件夹")
         if d:
@@ -829,7 +835,7 @@ class PhotoWatermarkApp:
     def show_preview(self):
         if not self.input_files or self.current_index == -1:
             return
-        # 三个功能都未启用时，只显示原图缩略图，不进行任何处理
+                # 三个功能都未启用时，只显示原图缩略图，不进行任何处理
         has_any_func = self.enable_border.get() or self.enable_watermark.get() or self.enable_hidden.get()
         if not has_any_func:
             dlg = ProgressDialog(self.root, "加载预览...", maximum=1)
@@ -866,7 +872,7 @@ class PhotoWatermarkApp:
                 dlg = ProgressDialog(self.root, "生成预览...", maximum=4)
                 dlg.set_text("正在渲染预览图")
                 self.root.update()
-                                # 1. 打开原图，缩放到适配画布的预览尺寸
+                # 1. 打开原图，缩放到适配画布的预览尺寸
                 with Image.open(img_path) as full_img:
                     full_img = apply_exif_orientation(full_img)
                     # 预留边框高度空间，避免边框文字超出画布底部
