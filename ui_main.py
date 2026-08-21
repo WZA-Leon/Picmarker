@@ -875,6 +875,7 @@ class PhotoWatermarkApp:
                 # 1. 打开原图，缩放到适配画布的预览尺寸
                 with Image.open(img_path) as full_img:
                     full_img = apply_exif_orientation(full_img)
+                    original_size = full_img.size  # 保存原图尺寸，供水印比例校准使用
                     # 预留边框高度空间，避免边框文字超出画布底部
                     if self.enable_border.get():
                         est_scale = (cw-20) / full_img.width
@@ -885,6 +886,8 @@ class PhotoWatermarkApp:
                         scale = min((cw-20)/full_img.width, (ch-20)/full_img.height, 1.0)
                     thumb_size = (int(full_img.width*scale), int(full_img.height*scale))
                     thumb = full_img.resize(thumb_size, RESAMPLE).convert("RGBA")
+
+
                 dlg.set_progress(1)
 
                 # 2. 调用统一核心方法渲染边框水印（与正式生成算法100%一致）
@@ -896,16 +899,27 @@ class PhotoWatermarkApp:
                     thumb = bordered.convert("RGBA")
                 dlg.set_progress(2)
 
-                # 3. 叠加明文水印（保留原有逻辑）
+                                # 3. 叠加明文水印（全尺寸渲染后整体缩放，保证与实际输出比例100%一致）
                 if self.enable_watermark.get() and self.simple_watermark_panel:
                     wm = self.simple_watermark_panel
-                    if wm.watermark_text.get().strip():
-                        font = wm.get_font(wm.font_family.get(), wm.font_size.get())
+                    wm_text = wm.watermark_text.get().strip()
+                    if wm_text:
+                        # 使用原始字号渲染，参数和正式批量输出完全一致
+                        base_font_size = int(wm.font_size.get())
+                        font = wm.get_font(wm.font_family.get(), base_font_size)
                         color = wm.color_map[wm.font_color_var.get()]
-                        overlay = Image.new("RGBA", thumb.size, (0, 0, 0, 0))
-                        wm.add_scattered_watermarks(overlay, wm.watermark_text.get(), font, color)
-                        thumb = Image.alpha_composite(thumb, overlay)
-                dlg.set_progress(3)
+                        
+                        # 创建与原图同尺寸的透明水印层，布局和实际生成完全相同
+                        full_overlay = Image.new("RGBA", original_size, (0, 0, 0, 0))
+                        wm.add_scattered_watermarks(full_overlay, wm_text, font, color)
+                        
+                        # 将水印层缩放到当前预览图尺寸，再叠加
+                        preview_overlay = full_overlay.resize(thumb.size, RESAMPLE)
+                        thumb = thumb.convert("RGBA")
+                        thumb = Image.alpha_composite(thumb, preview_overlay)
+
+
+
 
                 # 4. 保存预览缓存
                 tmp_thumb = temp_dir / f"_preview_{cur_hash}.jpg"
@@ -921,9 +935,14 @@ class PhotoWatermarkApp:
             self.canvas.create_image(cw//2, ch//2, image=self.preview_img, anchor=tk.CENTER)
             self.preview_label.config(text=f"预览: {os.path.basename(self.input_files[self.current_index])}")
         except Exception as e:
+            print(f"[预览渲染异常] 图片: {os.path.basename(img_path)}, 错误: {e}")
+            import traceback
+            traceback.print_exc()
             if 'dlg' in dir():
                 dlg.close()
+
     def start_batch(self):
+        print("预览渲染错误:", e)  # 控制台查看具体报错信息
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
             return
