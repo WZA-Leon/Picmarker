@@ -20,6 +20,13 @@ class WatermarkApp:
         self.is_bold = tk.BooleanVar(value=False)
         self.fonts = sorted(tkfont.families())
         self.font_family = tk.StringVar(value="Arial" if "Arial" in self.fonts else self.fonts[0])
+        #监听字号变化，只绑定一次（防抖，避免连续按键触发多次预览渲染导致抽搐）
+        self._size_debounce = None
+        def _on_size_change(*args):
+            if self._size_debounce:
+                self.main_app.root.after_cancel(self._size_debounce)
+            self._size_debounce = self.main_app.root.after(200, self.main_app.show_preview)
+        self.font_size.trace_add("write", _on_size_change)
         self.create_widgets()
 
     def create_widgets(self):
@@ -39,8 +46,6 @@ class WatermarkApp:
         ttk.Label(settings_frame, text="字体大小:").grid(row=1, column=0, sticky=tk.W, pady=(5,0))
         size_spin = ttk.Spinbox(settings_frame, from_=10, to=100, textvariable=self.font_size, width=8)
         size_spin.grid(row=1, column=1, padx=(5,0), pady=(5,0), sticky=tk.W)
-        size_spin.bind("<<Increment>>", lambda e: self.main_app.show_preview())
-        size_spin.bind("<<Decrement>>", lambda e: self.main_app.show_preview())
         size_spin.bind("<MouseWheel>", lambda e: "break", add="+")
         size_spin.bind("<Button-4>", lambda e: "break", add="+")
         size_spin.bind("<Button-5>", lambda e: "break", add="+")
@@ -55,7 +60,7 @@ class WatermarkApp:
         color_combo.bind("<Button-5>", lambda e: "break", add="+")
 
         bold_check = ttk.Checkbutton(settings_frame, text="加粗", variable=self.is_bold, command=self.main_app.show_preview)
-        bold_check.grid(row=3, column=0, pady=(5,0), sticky=tk.W)
+        bold_check.grid(row=4, column=2, padx=(5,0), pady=(5,0), sticky=tk.W)
 
         ttk.Label(settings_frame, text="字体:").grid(row=4, column=0, sticky=tk.W, pady=(5,0))
         font_combo = ttk.Combobox(settings_frame, textvariable=self.font_family, values=self.fonts, state="readonly")
@@ -65,7 +70,7 @@ class WatermarkApp:
         font_combo.bind("<Button-4>", lambda e: "break", add="+")
         font_combo.bind("<Button-5>", lambda e: "break", add="+")
 
-    def add_scattered_watermarks(self, image, text, font, color):
+    def add_scattered_watermarks(self, image, text, font, color):      
         width, height = image.size
         rotated_text = self.create_rotated_text_image(text, font, color)
         text_width, text_height = rotated_text.size
@@ -78,17 +83,11 @@ class WatermarkApp:
                 x += spacing
             y += spacing
 
-
-
-
-
-
-
-    def get_font(self, family, size):
+    def get_font(self, family, size, bold=False):
         chinese_fonts = [
-            "C:\\Windows\\Fonts\\msyh.ttc",
-            "C:\\Windows\\Fonts\\simsun.ttc",
+            "C:\\Windows\\Fonts\\msyhbd.ttc" if bold else "C:\\Windows\\Fonts\\msyh.ttc",
             "C:\\Windows\\Fonts\\simhei.ttf",
+            "C:\\Windows\\Fonts\\simsun.ttc",
         ]
         for font_path in chinese_fonts:
             try:
@@ -143,7 +142,7 @@ class WatermarkApp:
         for image_path in image_paths:
             try:
                 image = apply_exif_orientation(Image.open(image_path))
-                font = self.get_font(self.font_family.get(), self.font_size.get())
+                font = self.get_font(self.font_family.get(), self.font_size.get(), self.is_bold.get())
                 self.add_scattered_watermarks(image, self.watermark_text.get(), font, font_color)
                 base_name = os.path.basename(image_path)
                 output_file = os.path.join(output_path, f"watermarked_{base_name}")

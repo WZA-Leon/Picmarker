@@ -1009,12 +1009,12 @@
         "Olympus M.Zuiko 25mm f/1.8",
         "Olympus M.Zuiko 45mm f/1.8",
         "Olympus M.Zuiko 9-18mm f/4.0-5.6",
-        "DJI Mavic 3 哈苏主摄 24mm 等效 f/2.8-f/11",
-        "DJI Mavic 3 长焦 162mm 等效 f/4.4",
-        "DJI Air 3S 主摄 24mm 等效 f/1.8",
-        "DJI Air 3S 长焦 70mm 等效 f/2.8",
-        "DJI Osmo Action 4 155° 超广角 f/2.8",
-        "DJI Osmo Pocket 3 20mm 等效 f/2.0"
+        "DJI Mavic 3 24mm  f/2.8-f/11",
+        "DJI Mavic 3 162mm  f/4.4",
+        "DJI Air 3S 24mm  f/1.8",
+        "DJI Air 3S 70mm  f/2.8",
+        "DJI Osmo Action 4 155° f/2.8",
+        "DJI Osmo Pocket 3 20mm  f/2.0"
       ]
     },
     "GoPro": {
@@ -1026,7 +1026,7 @@
         "GoPro MAX 360"
       ],
       "lenses": [
-        ""
+        "ni de dan zi zhen shi fei du du de"
       ]
     }
   }

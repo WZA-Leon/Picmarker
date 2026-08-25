@@ -11,6 +11,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import hashlib
+import difflib
 
 from config import GUI_CFG, CAMERA_DB, WM_CFG
 from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel, apply_exif_orientation
@@ -712,6 +713,8 @@ class PhotoWatermarkApp:
         self.on_brand_change()
         self.camera_var.set(edits["camera"])
         self.lens_var.set(edits["lens"])
+        # 镜头不在数据库时，匹配最相似的镜头
+        self._match_lens_to_db()
         self.focal_var.set(edits["focal"])
         self.f_var.set(edits["f"])
         self.exp_var.set(edits["exp"])
@@ -720,6 +723,18 @@ class PhotoWatermarkApp:
         self.loc_var.set(edits["location"])
         self.photo_name_var.set(edits["photo_name"])
         self.root.after(100, self.show_preview)
+    def _match_lens_to_db(self):
+        """镜头不在数据库时，匹配最相似的镜头"""
+        brand = self.brand_var.get().strip()
+        if brand not in CAMERA_DB:
+            return
+        lens = CAMERA_DB[brand].get("lenses", [])
+        cur = self.lens_var.get().strip()
+        if cur and cur not in lens:
+            best = difflib.get_close_matches(cur, lens, n=1, cutoff=0.3)
+            if best:
+                self.lens_var.set(best[0])
+
     def on_brand_change(self, event=None):
         brand = self.brand_var.get().strip()
         if brand in CAMERA_DB:
@@ -727,6 +742,7 @@ class PhotoWatermarkApp:
             lens = CAMERA_DB[brand].get("lenses", [])
             self.cbo_cam.config(values=cams)
             self.cbo_len.config(values=lens)
+            self._match_lens_to_db()
 
     def _on_focal_key(self, event=None):
         """焦距输入：只允许数字和连字符"""
@@ -906,7 +922,7 @@ class PhotoWatermarkApp:
                     if wm_text:
                         # 使用原始字号渲染，参数和正式批量输出完全一致
                         base_font_size = int(wm.font_size.get())
-                        font = wm.get_font(wm.font_family.get(), base_font_size)
+                        font = wm.get_font(wm.font_family.get(), base_font_size, wm.is_bold.get())
                         color = wm.color_map[wm.font_color_var.get()]
                         
                         # 创建与原图同尺寸的透明水印层，布局和实际生成完全相同
@@ -942,7 +958,6 @@ class PhotoWatermarkApp:
                 dlg.close()
 
     def start_batch(self):
-        print("预览渲染错误:", e)  # 控制台查看具体报错信息
         if not self.input_files:
             messagebox.showwarning("提示", "请先添加照片")
             return
@@ -1010,7 +1025,7 @@ class PhotoWatermarkApp:
                             wm = self.simple_watermark_panel
                             if wm.watermark_text.get().strip():
                                 img = apply_exif_orientation(Image.open(out)).convert("RGBA")
-                                wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get())
+                                wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get(), wm.is_bold.get())
                                 color = wm.color_map[wm.font_color_var.get()]
                                 wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
                                 img.convert("RGB").save(out, quality=95)

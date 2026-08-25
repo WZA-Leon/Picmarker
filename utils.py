@@ -123,58 +123,63 @@ class WatermarkGenerator:
         if cache_key in WatermarkGenerator._font_cache:
             return WatermarkGenerator._font_cache[cache_key]
 
+        # 通过注册表枚举系统字体，优先选择中文字体
+        cn_keywords = ["yahei", "msyh", "simsun", "simhei", "dengxian",
+                       "kaiti", "fangsong", "song", "hei", "kai", "fang"]
         try:
             if platform.system() == "Windows":
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                      r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
                 i = 0
-                best_match = None
+                cn_candidates = []
                 while True:
                     try:
                         fname, fpath, _ = winreg.EnumValue(key, i)
-                        clean_name = fname.replace(" (TrueType)", "").replace(" (OpenType)", "")
-                        if name.lower() == clean_name.lower():
+                        if ".ttf" in fpath.lower() or ".ttc" in fpath.lower():
                             full_path = os.path.join("C:/Windows/Fonts", fpath)
                             if os.path.exists(full_path):
-                                font = ImageFont.truetype(full_path, size)
-                                WatermarkGenerator._font_cache[cache_key] = font
-                                return font
-                        if name.lower() in fname.lower() and best_match is None:
-                            best_match = fpath
+                                # 优先匹配用户选择的字体名
+                                clean = fname.split(" (TrueType)")[0].split(" (OpenType)")[0]
+                                if name.lower() == clean.lower():
+                                    font = ImageFont.truetype(full_path, size)
+                                    WatermarkGenerator._font_cache[cache_key] = font
+                                    return font
+                                # 收集中文字体作为候选
+                                if any(k in fname.lower() for k in cn_keywords):
+                                    cn_candidates.append(full_path)
                         i += 1
                     except:
                         break
-                if best_match:
-                    full_path = os.path.join("C:/Windows/Fonts", best_match)
-                    if os.path.exists(full_path):
+                # 用户字体未找到时，优先用中文字体
+                for full_path in cn_candidates:
+                    try:
                         font = ImageFont.truetype(full_path, size)
                         WatermarkGenerator._font_cache[cache_key] = font
                         return font
-                for ext in [".ttc", ".ttf"]:
-                    p = f"C:/Windows/Fonts/{name}{ext}"
-                    if os.path.exists(p):
-                        font = ImageFont.truetype(p, size)
-                        WatermarkGenerator._font_cache[cache_key] = font
-                        return font
-                for fallback in ["msyh.ttc", "arial.ttf", "simhei.ttf"]:
-                    p = f"C:/Windows/Fonts/{fallback}"
-                    if os.path.exists(p):
-                        font = ImageFont.truetype(p, size)
-                        WatermarkGenerator._font_cache[cache_key] = font
-                        return font
-            else:
-                for p in [
-                    f"/System/Library/Fonts/{name}.ttc",
-                    "/System/Library/Fonts/PingFang.ttc",
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-                ]:
-                    if os.path.exists(p):
-                        font = ImageFont.truetype(p, size)
-                        WatermarkGenerator._font_cache[cache_key] = font
-                        return font
-        except Exception as e:
-            print(f"[Font] ERROR loading '{name}': {e}")
-        
+                    except:
+                        continue
+        except:
+            pass
+
+        # 回退：直接按名字加载
+        try:
+            font = ImageFont.truetype(name, size)
+            WatermarkGenerator._font_cache[cache_key] = font
+            return font
+        except:
+            pass
+        font_paths = [
+            f"C:\\Windows\\Fonts\\{name}.ttf",
+            f"C:\\Windows\\Fonts\\{name}.ttc",
+            "C:\\Windows\\Fonts\\arial.ttf",
+        ]
+        for path in font_paths:
+            try:
+                font = ImageFont.truetype(path, size)
+                WatermarkGenerator._font_cache[cache_key] = font
+                return font
+            except:
+                continue
         font = ImageFont.load_default()
         WatermarkGenerator._font_cache[cache_key] = font
         return font
@@ -321,21 +326,25 @@ class WatermarkGenerator:
     def add_watermark(img_path, out_path, data, font_name):
         # 读取图片并校正方向
         img = apply_exif_orientation(Image.open(img_path))
-        
+
         # 调用统一渲染核心（与预览使用完全相同的算法）
         result_img = WatermarkGenerator.render_border(img, data, font_name)
-        
-        # 保存图片
-        result_img.save(out_path, quality=95)
 
-        # 保留EXIF并重置方向（避免查看器二次旋转）
+        # 只要图片有EXIF，就强制原样保留，不做任何修改
+        exif_bytes = None
         try:
             exif_dict = piexif.load(img_path)
-            exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
-            exif_bytes = piexif.dump(exif_dict)
-            piexif.insert(exif_bytes, out_path)
+            # 强制：只要load成功且非空，就原样dump传回，不管内容是什么
+            if exif_dict:
+                exif_bytes = piexif.dump(exif_dict)
         except Exception as e:
-            print(f"EXIF保存失败 ({os.path.basename(img_path)}): {e}")
+            print(f"EXIF读取失败 ({os.path.basename(img_path)}): {e}")
+
+        # 保存图片（有EXIF时直接携带原EXIF，避免二次插入冲突）
+        if exif_bytes:
+            result_img.save(out_path, quality=95, exif=exif_bytes)
+        else:
+            result_img.save(out_path, quality=95)
             
 class CollapsiblePanel(ttk.Frame):
     def __init__(self, parent, title, expanded=False):
