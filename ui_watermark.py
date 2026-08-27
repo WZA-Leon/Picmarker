@@ -1,10 +1,10 @@
 import tkinter as tk
-from tkinter import ttk,messagebox,font as tkfont
+from tkinter import ttk,messagebox
 from PIL import Image, ImageDraw, ImageFont
 import os
 import platform
 import piexif
-from utils import apply_exif_orientation
+from utils import apply_exif_orientation, WatermarkGenerator, FontManager
 
 class WatermarkApp:
     def __init__(self, parent_frame, main_app):
@@ -18,15 +18,8 @@ class WatermarkApp:
             "蓝色": "#498AEB", "绿色": "#009300"
         }
         self.is_bold = tk.BooleanVar(value=False)
-        self.fonts = sorted(tkfont.families())
+        self.fonts = FontManager.get_system_fonts()
         self.font_family = tk.StringVar(value="Arial" if "Arial" in self.fonts else self.fonts[0])
-        #监听字号变化，只绑定一次（防抖，避免连续按键触发多次预览渲染导致抽搐）
-        self._size_debounce = None
-        def _on_size_change(*args):
-            if self._size_debounce:
-                self.main_app.root.after_cancel(self._size_debounce)
-            self._size_debounce = self.main_app.root.after(200, self.main_app.show_preview)
-        self.font_size.trace_add("write", _on_size_change)
         self.create_widgets()
 
     def create_widgets(self):
@@ -37,11 +30,16 @@ class WatermarkApp:
         # 水印设置
         settings_frame = ttk.LabelFrame(main_frame, text="简易水印设置", padding="5")
         settings_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=2)
+        settings_frame.columnconfigure(1, weight=1)
+
+        # 右上角保存按钮
+        ttk.Button(settings_frame, text="保存", width=6,
+                   command=self.main_app.show_preview).grid(row=0, column=3, rowspan=5,
+                                                            sticky=(tk.NE), padx=(5,0))
 
         ttk.Label(settings_frame, text="水印内容:").grid(row=0, column=0, sticky=tk.W)
         text_entry = ttk.Entry(settings_frame, textvariable=self.watermark_text, width=25)
-        text_entry.grid(row=0, column=1, padx=(5,0))
-        text_entry.bind("<KeyRelease>", lambda e: self.main_app.show_preview())
+        text_entry.grid(row=0, column=1, padx=(5,0), sticky=tk.W)
 
         ttk.Label(settings_frame, text="字体大小:").grid(row=1, column=0, sticky=tk.W, pady=(5,0))
         size_spin = ttk.Spinbox(settings_frame, from_=10, to=100, textvariable=self.font_size, width=8)
@@ -54,18 +52,16 @@ class WatermarkApp:
         color_options = list(self.color_map.keys())
         color_combo = ttk.Combobox(settings_frame, textvariable=self.font_color_var, values=color_options, state="readonly")
         color_combo.grid(row=2, column=1, padx=(5,0), pady=(5,0), sticky=tk.W)
-        color_combo.bind("<<ComboboxSelected>>", lambda e: self.main_app.show_preview())
         color_combo.bind("<MouseWheel>", lambda e: "break", add="+")
         color_combo.bind("<Button-4>", lambda e: "break", add="+")
         color_combo.bind("<Button-5>", lambda e: "break", add="+")
 
-        bold_check = ttk.Checkbutton(settings_frame, text="加粗", variable=self.is_bold, command=self.main_app.show_preview)
+        bold_check = ttk.Checkbutton(settings_frame, text="加粗", variable=self.is_bold)
         bold_check.grid(row=4, column=2, padx=(5,0), pady=(5,0), sticky=tk.W)
 
         ttk.Label(settings_frame, text="字体:").grid(row=4, column=0, sticky=tk.W, pady=(5,0))
         font_combo = ttk.Combobox(settings_frame, textvariable=self.font_family, values=self.fonts, state="readonly")
         font_combo.grid(row=4, column=1, padx=(5,0), pady=(5,0), sticky=(tk.W, tk.E))
-        font_combo.bind("<<ComboboxSelected>>", lambda e: self.main_app.show_preview())
         font_combo.bind("<MouseWheel>", lambda e: "break", add="+")
         font_combo.bind("<Button-4>", lambda e: "break", add="+")
         font_combo.bind("<Button-5>", lambda e: "break", add="+")
@@ -84,31 +80,8 @@ class WatermarkApp:
             y += spacing
 
     def get_font(self, family, size, bold=False):
-        chinese_fonts = [
-            "C:\\Windows\\Fonts\\msyhbd.ttc" if bold else "C:\\Windows\\Fonts\\msyh.ttc",
-            "C:\\Windows\\Fonts\\simhei.ttf",
-            "C:\\Windows\\Fonts\\simsun.ttc",
-        ]
-        for font_path in chinese_fonts:
-            try:
-                return ImageFont.truetype(font_path, size)
-            except:
-                continue
-        try:
-            return ImageFont.truetype(family, size)
-        except:
-            pass
-        font_paths = [
-            f"C:\\Windows\\Fonts\\{family}.ttf",
-            f"C:\\Windows\\Fonts\\{family}.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ]
-        for path in font_paths:
-            try:
-                return ImageFont.truetype(path, size)
-            except:
-                continue
-        return ImageFont.load_default()
+        # 统一使用 WatermarkGenerator 的字体加载机制（与边框水印一致）
+        return WatermarkGenerator.get_font(family, size, bold)
 
     def create_rotated_text_image(self, text, font, color):
         temp_draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
@@ -146,14 +119,18 @@ class WatermarkApp:
                 self.add_scattered_watermarks(image, self.watermark_text.get(), font, font_color)
                 base_name = os.path.basename(image_path)
                 output_file = os.path.join(output_path, f"watermarked_{base_name}")
-                image.save(output_file)
-                # 恢复 EXIF（图片已按方向旋转，重置 Orientation 为 1）
+                # 已有的EXIF项强制原样保留，不做任何修改
+                exif_bytes = None
                 try:
                     exif_dict = piexif.load(image_path)
-                    exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
-                    piexif.insert(piexif.dump(exif_dict), output_file)
+                    if exif_dict:
+                        exif_bytes = piexif.dump(exif_dict)
                 except:
                     pass
+                if exif_bytes:
+                    image.save(output_file, exif=exif_bytes)
+                else:
+                    image.save(output_file)
                 success_count += 1
             except Exception as e:
                 messagebox.showerror("错误", f"处理失败 {os.path.basename(image_path)}:{str(e)}")

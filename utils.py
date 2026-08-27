@@ -32,6 +32,7 @@ class ExifReader:
     @staticmethod
     def _safe_str(val):
         return str(val).strip()
+    
     @staticmethod
     def get_exif_full(image_path):
         info = {
@@ -92,46 +93,59 @@ class ExifReader:
 class FontManager:
     @staticmethod
     def get_system_fonts():
-        fonts = []
         try:
-            if platform.system() == "Windows":
-                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
-                                     r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
-                i = 0
-                while True:
-                    try:
-                        name, path, _ = winreg.EnumValue(key, i)
-                        if ".ttf" in path or ".ttc" in path:
-                            fonts.append(name.split(" (TrueType)")[0])
-                        i += 1
-                    except:
-                        break
-            else:
-                fonts = ["Arial", "Sans", "PingFang", "Microsoft YaHei"]
+            import tkinter as tk
+            from tkinter import font as tkfont
+            root = tk.Tk()
+            root.withdraw()
+            families = sorted(tkfont.families())
+            root.destroy()
         except:
-            fonts = ["Microsoft YaHei", "Arial", "Sans"]
-        return sorted(list(set(fonts)))
+            families = ["Arial", "Microsoft YaHei", "SimHei", "SimSun"]
+        # 过滤 @ 开头的竖排变体、粗体/斜体/细体等变体
+        skip = ["bold", "black", "italic", "light", "medium",
+                "semibold", "thin", "regular", "oblique"]
+        result = []
+        for f in families:
+            if f.startswith("@"):
+                continue
+            if any(k in f.lower() for k in skip):
+                continue
+            result.append(f)
+        return sorted(list(set(result)))
 
 
 class WatermarkGenerator:
     # 字体缓存：相同字体名+字号只加载一次，提升预览性能
     _font_cache = {}
 
+    # 中文字体显示名 -> 注册表英文名映射（仅注册表里是英文名的字体）
+    _CN_FONT_MAP = {
+        "宋体": "SimSun", "新宋体": "SimSun", "黑体": "SimHei",
+        "楷体": "KaiTi", "仿宋": "FangSong", "等线": "DengXian",
+        "微软雅黑": "Microsoft YaHei",
+    }
+
     @staticmethod
-    def get_font(name, size):
-        cache_key = (name.lower(), size)
+    def get_font(name, size, bold=False):
+        cache_key = (name.lower(), size, bold)
         if cache_key in WatermarkGenerator._font_cache:
             return WatermarkGenerator._font_cache[cache_key]
+
+        # 中文字体显示名映射到注册表英文名，便于匹配
+        name = WatermarkGenerator._CN_FONT_MAP.get(name.strip(), name)
 
         # 通过注册表枚举系统字体，优先选择中文字体
         cn_keywords = ["yahei", "msyh", "simsun", "simhei", "dengxian",
                        "kaiti", "fangsong", "song", "hei", "kai", "fang"]
+        bold_keywords = ["bold", "bd", "粗体", "黑体"]
         try:
             if platform.system() == "Windows":
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                      r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
                 i = 0
                 cn_candidates = []
+                bold_candidates = []
                 while True:
                     try:
                         fname, fpath, _ = winreg.EnumValue(key, i)
@@ -140,16 +154,41 @@ class WatermarkGenerator:
                             if os.path.exists(full_path):
                                 # 优先匹配用户选择的字体名
                                 clean = fname.split(" (TrueType)")[0].split(" (OpenType)")[0]
-                                if name.lower() == clean.lower():
-                                    font = ImageFont.truetype(full_path, size)
-                                    WatermarkGenerator._font_cache[cache_key] = font
-                                    return font
+                                # 去掉粗体/斜体等变体后缀，便于与用户选择的字体名匹配
+                                clean_base = clean
+                                for kw in bold_keywords + ["italic", "oblique", "regular", "light", "medium", "semibold", "thin"]:
+                                    clean_base = clean_base.replace(kw, "").replace(kw.capitalize(), "")
+                                clean_base = clean_base.strip()
+                                nl = name.lower()
+                                cl = clean_base.lower()
+                                # 精确匹配，或前缀匹配（如 "Microsoft YaHei" 匹配 "Microsoft YaHei & Microsoft YaHei UI"）
+                                if nl == cl or cl.startswith(nl) or nl.startswith(cl):
+                                    # 加粗时优先用粗体变体
+                                    if bold and any(k in fname.lower() for k in bold_keywords):
+                                        font = ImageFont.truetype(full_path, size)
+                                        WatermarkGenerator._font_cache[cache_key] = font
+                                        return font
+                                    if not bold:
+                                        font = ImageFont.truetype(full_path, size)
+                                        WatermarkGenerator._font_cache[cache_key] = font
+                                        return font
                                 # 收集中文字体作为候选
                                 if any(k in fname.lower() for k in cn_keywords):
+                                    if bold and any(k in fname.lower() for k in bold_keywords):
+                                        bold_candidates.append(full_path)
                                     cn_candidates.append(full_path)
                         i += 1
                     except:
                         break
+                # 加粗时优先用粗体中文字体
+                if bold:
+                    for full_path in bold_candidates:
+                        try:
+                            font = ImageFont.truetype(full_path, size)
+                            WatermarkGenerator._font_cache[cache_key] = font
+                            return font
+                        except:
+                            continue
                 # 用户字体未找到时，优先用中文字体
                 for full_path in cn_candidates:
                     try:
@@ -173,6 +212,14 @@ class WatermarkGenerator:
             f"C:\\Windows\\Fonts\\{name}.ttc",
             "C:\\Windows\\Fonts\\arial.ttf",
         ]
+        if bold:
+            font_paths = [
+                "C:\\Windows\\Fonts\\msyhbd.ttc",
+                "C:\\Windows\\Fonts\\simhei.ttf",
+                f"C:\\Windows\\Fonts\\{name}.ttf",
+                f"C:\\Windows\\Fonts\\{name}.ttc",
+                "C:\\Windows\\Fonts\\arial.ttf",
+            ]
         for path in font_paths:
             try:
                 font = ImageFont.truetype(path, size)
@@ -203,7 +250,7 @@ class WatermarkGenerator:
 
     # ========== 核心：纯渲染方法（预览+正式生成 100% 共用） ==========
     @staticmethod
-    def render_border(img: Image.Image, data: dict, font_name: str) -> Image.Image:
+    def render_border(img: Image.Image, data: dict, font_name: str, bold: bool = False) -> Image.Image:
         img = img.convert("RGB")
         w, h = img.size
 
@@ -230,11 +277,11 @@ class WatermarkGenerator:
         stroke_w = max(0, int(WM_CFG["stroke"]["width"] * scale)) if stroke_en else 0
         stroke_c = tuple(WM_CFG["stroke"]["fill"]) if stroke_en else None
 
-        font_cam = WatermarkGenerator.get_font(font_name, max(1, int(fc["camera"] * scale)))
-        font_len = WatermarkGenerator.get_font(font_name, max(1, int(fc["lens"] * scale)))
-        font_name_f = WatermarkGenerator.get_font(font_name, max(1, int(fc["name"] * scale)))
-        font_param = WatermarkGenerator.get_font(font_name, max(1, int(fc["params"] * scale)))
-        font_time = WatermarkGenerator.get_font(font_name, max(1, int(fc["time"] * scale)))
+        font_cam = WatermarkGenerator.get_font(font_name, max(1, int(fc["camera"] * scale)), bold)
+        font_len = WatermarkGenerator.get_font(font_name, max(1, int(fc["lens"] * scale)), bold)
+        font_name_f = WatermarkGenerator.get_font(font_name, max(1, int(fc["name"] * scale)), bold)
+        font_param = WatermarkGenerator.get_font(font_name, max(1, int(fc["params"] * scale)), bold)
+        font_time = WatermarkGenerator.get_font(font_name, max(1, int(fc["time"] * scale)), bold)
 
         # 图标：统一乘 scale + 宽高双重限制，防止超出边框
         icon = WatermarkGenerator.load_brand_icon(data["brand"])
@@ -242,13 +289,13 @@ class WatermarkGenerator:
         icon_h = max(1, int(icon.height * scale))
         icon_w = max(1, int(icon.width * scale))
         icon = icon.resize((icon_w, icon_h), RESAMPLE)
-        
+
         # 限制最大宽度
         max_icon_w = int(w / 5)
         if icon.width > max_icon_w:
             new_h = max(1, int(icon.height * max_icon_w / icon.width))
             icon = icon.resize((max_icon_w, new_h), RESAMPLE)
-        
+
         # 新增：限制最大高度，不超过边框高度的85%，避免上下溢出
         max_icon_h = int(bar_h * 0.85)
         if icon.height > max_icon_h:
@@ -323,12 +370,12 @@ class WatermarkGenerator:
 
     # ========== 正式生成方法：仅负责IO与EXIF，渲染复用 render_border ==========
     @staticmethod
-    def add_watermark(img_path, out_path, data, font_name):
+    def add_watermark(img_path, out_path, data, font_name, bold=False):
         # 读取图片并校正方向
         img = apply_exif_orientation(Image.open(img_path))
 
         # 调用统一渲染核心（与预览使用完全相同的算法）
-        result_img = WatermarkGenerator.render_border(img, data, font_name)
+        result_img = WatermarkGenerator.render_border(img, data, font_name, bold)
 
         # 只要图片有EXIF，就强制原样保留，不做任何修改
         exif_bytes = None

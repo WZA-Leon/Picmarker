@@ -123,20 +123,17 @@ class DWTWatermark:
         exif_bytes = None
         try:
             exif_dict = piexif.load(img_path)
-            # 图片按 EXIF 方向旋转，重置 Orientation 为 1，避免查看器二次旋转
-            exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
-            exif_bytes = piexif.dump(exif_dict)
+            # 已有的EXIF项强制原样保留，不做任何修改
+            if exif_dict:
+                exif_bytes = piexif.dump(exif_dict)
         except Exception as e:
             print(f"EXIF读取失败 ({Path(img_path).name}): {e}")
 
-        Image.fromarray(result).save(output_path, quality=95)
-
-        # 保存 EXIF
-        if exif_bytes is not None:
-            try:
-                piexif.insert(exif_bytes, output_path)
-            except Exception as e:
-                print(f"EXIF保存失败 ({Path(output_path).name}): {e}")
+        # 保存图片（有EXIF时直接携带原EXIF，避免二次插入冲突）
+        if exif_bytes:
+            Image.fromarray(result).save(output_path, quality=95, exif=exif_bytes)
+        else:
+            Image.fromarray(result).save(output_path, quality=95)
 
     def extract(self, img_path: str, wm_shape: int = None,
                 wavelet: str = 'haar', redundancy: int = 5) -> str:

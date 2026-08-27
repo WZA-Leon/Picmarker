@@ -1,4 +1,4 @@
-import tkinter as tk
+﻿import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, font as tkfont
 from PIL import Image, ImageTk, ImageDraw
 try:
@@ -49,6 +49,7 @@ class PhotoWatermarkApp:
         self.iso_var = tk.StringVar()
         self.time_var = tk.StringVar()
         self.loc_var = tk.StringVar()
+        self.border_bold = tk.BooleanVar(value=False)
         self.simple_watermark_panel = None
         self._cached_preview_path = None  # 缓存上次生成的预览图路径
         self._cached_params = {}  # 缓存参数哈希
@@ -104,6 +105,9 @@ class PhotoWatermarkApp:
             while w:
                 if w is self.checklist_canvas or w is self.checklist_inner:
                     return "break"
+                # 某些控件（如 Combobox 弹出列表）widget 可能是字符串，需跳过
+                if not hasattr(w, "master"):
+                    break
                 w = w.master
             # 检查鼠标是否在 left_canvas 区域内
             if self._mouse_in_left:
@@ -185,20 +189,21 @@ class PhotoWatermarkApp:
         self.cbo_brand.pack(side=tk.LEFT, padx=(0, 10))
         self.cbo_brand.bind("<<ComboboxSelected>>", self.on_brand_change)
         self.cbo_brand.bind("<KeyRelease>", lambda e: self.on_brand_change())
-        self.cbo_brand.bind("<<ComboboxSelected>>", lambda e: self.show_preview(), add="+")
+
+        # 保存按钮（右上角）
+        ttk.Button(row1, text="保存", width=6, command=self.show_preview).pack(side=tk.RIGHT)
+        
         ttk.Label(row2, text="相机：", width=6).pack(side=tk.LEFT)
         self.cbo_cam = ttk.Combobox(row2, textvariable=self.camera_var, width=20, state="readonly")
         self.cbo_cam.bind("<MouseWheel>", lambda e: "break", add="+")
         self.cbo_cam.bind("<Button-4>", lambda e: "break", add="+")
         self.cbo_cam.bind("<Button-5>", lambda e: "break", add="+")
-        self.cbo_cam.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_cam.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row3, text="镜头：", width=6).pack(side=tk.LEFT)
         self.cbo_len = ttk.Combobox(row3, textvariable=self.lens_var, width=20, state="readonly")
         self.cbo_len.bind("<MouseWheel>", lambda e: "break", add="+")
         self.cbo_len.bind("<Button-4>", lambda e: "break", add="+")
         self.cbo_len.bind("<Button-5>", lambda e: "break", add="+")
-        self.cbo_len.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_len.pack(side=tk.LEFT)
         ttk.Label(row4, text="焦距：", width=6).pack(side=tk.LEFT)
         self.cbo_focal = ttk.Entry(row4, textvariable=self.focal_var, width=20)
@@ -226,7 +231,6 @@ class PhotoWatermarkApp:
         self.cbo_f.bind("<MouseWheel>", lambda e: "break", add="+")
         self.cbo_f.bind("<Button-4>", lambda e: "break", add="+")
         self.cbo_f.bind("<Button-5>", lambda e: "break", add="+")
-        self.cbo_f.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_f.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row6, text="快门：", width=6).pack(side=tk.LEFT)
         self.cbo_exp = ttk.Combobox(row6, textvariable=self.exp_var, width=20, state="readonly",
@@ -255,7 +259,6 @@ class PhotoWatermarkApp:
         self.cbo_exp.bind("<MouseWheel>", lambda e: "break", add="+")
         self.cbo_exp.bind("<Button-4>", lambda e: "break", add="+")
         self.cbo_exp.bind("<Button-5>", lambda e: "break", add="+")
-        self.cbo_exp.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_exp.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Label(row7, text="ISO：", width=6).pack(side=tk.LEFT)
         self.cbo_iso = ttk.Combobox(row7, textvariable=self.iso_var, width=20, state="readonly",
@@ -277,7 +280,6 @@ class PhotoWatermarkApp:
         self.cbo_iso.bind("<MouseWheel>", lambda e: "break", add="+")
         self.cbo_iso.bind("<Button-4>", lambda e: "break", add="+")
         self.cbo_iso.bind("<Button-5>", lambda e: "break", add="+")
-        self.cbo_iso.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
         self.cbo_iso.pack(side=tk.LEFT)
         ttk.Label(row8, text="时间：", width=6).pack(side=tk.LEFT)
         self.time_year = tk.StringVar()
@@ -341,7 +343,7 @@ class PhotoWatermarkApp:
         self.font_cb.bind("<Button-4>", lambda e: "break", add="+")
         self.font_cb.bind("<Button-5>", lambda e: "break", add="+")
         self.font_cb.pack(side=tk.LEFT)
-        self.font_cb.bind("<<ComboboxSelected>>", lambda e: self.show_preview())
+        ttk.Checkbutton(row10, text="加粗", variable=self.border_bold).pack(side=tk.LEFT, padx=(5,0))
         # ========== 第二个折叠面板：明文水印，内部嵌入Picmarker完整界面 ==========
         panel_text = CollapsiblePanel(self.left_scroll_content, "明文水印", expanded=False)
         panel_text.pack(fill="x", pady=3)
@@ -440,7 +442,14 @@ class PhotoWatermarkApp:
                 "datetime": self.time_var.get().strip(),
                 "location": self.loc_var.get().strip(),
                 "photo_name": self.photo_name_var.get().strip(),
-                "_has_exif": old.get("_has_exif", False)
+                "_has_brand": old.get("_has_brand", False),
+                "_has_camera": old.get("_has_camera", False),
+                "_has_lens": old.get("_has_lens", False),
+                "_has_focal": old.get("_has_focal", False),
+                "_has_f": old.get("_has_f", False),
+                "_has_exp": old.get("_has_exp", False),
+                "_has_iso": old.get("_has_iso", False),
+                "_has_datetime": old.get("_has_datetime", False)
             }
 
     def prev_image(self):
@@ -688,27 +697,36 @@ class PhotoWatermarkApp:
                 "datetime": info.get("datetime", ""),
                 "location": "",
                 "photo_name": "",
-                "_has_exif": bool(info.get("camera_model") or info.get("lens_model"))
+                "_has_brand": bool(info.get("make")),
+                "_has_camera": bool(info.get("camera_model")),
+                "_has_lens": bool(info.get("lens_model")),
+                "_has_focal": bool(info.get("focal")),
+                "_has_f": bool(info.get("f")),
+                "_has_exp": bool(info.get("exposure")),
+                "_has_iso": bool(info.get("iso")),
+                "_has_datetime": bool(info.get("datetime"))
             }
             self._user_edits[self.current_index] = edits
-        # 存在相机/镜头 EXIF 时禁用自定义选择，否则允许自定义
-        has_exif = edits.get("_has_exif", False)
-        state = "disabled" if has_exif else "readonly"
-        self.cbo_brand.config(state=state)
-        self.cbo_cam.config(state=state)
-        self.cbo_len.config(state=state)
+        # 逐项判断：已存在 EXIF 的字段禁用，不存在的允许自定义
+        def _st(flag):
+            return "disabled" if flag else "readonly"
+        self.cbo_brand.config(state=_st(edits.get("_has_brand", False)))
+        self.cbo_cam.config(state=_st(edits.get("_has_camera", False)))
+        self.cbo_len.config(state=_st(edits.get("_has_lens", False)))
         # 焦距：EXIF 存在时禁用，否则允许输入
-        self.cbo_focal.config(state="disabled" if has_exif else "normal")
+        self.cbo_focal.config(state="disabled" if edits.get("_has_focal", False) else "normal")
         # 光圈/快门/ISO：EXIF 存在时禁用，否则允许选择
-        for cbo in (self.cbo_f, self.cbo_exp, self.cbo_iso):
-            cbo.config(state="disabled" if has_exif else "readonly")
-        # 时间：始终允许用户修改年月日时分秒
-        self.cbo_time_y.config(state="readonly")
-        self.cbo_time_m.config(state="readonly")
-        self.cbo_time_d.config(state="readonly")
-        self.cbo_time_h.config(state="readonly")
-        self.cbo_time_min.config(state="readonly")
-        self.cbo_time_s.config(state="readonly")
+        self.cbo_f.config(state=_st(edits.get("_has_f", False)))
+        self.cbo_exp.config(state=_st(edits.get("_has_exp", False)))
+        self.cbo_iso.config(state=_st(edits.get("_has_iso", False)))
+        # 时间：EXIF 存在时禁用，否则允许修改年月日时分秒
+        tstate = _st(edits.get("_has_datetime", False))
+        self.cbo_time_y.config(state=tstate)
+        self.cbo_time_m.config(state=tstate)
+        self.cbo_time_d.config(state=tstate)
+        self.cbo_time_h.config(state=tstate)
+        self.cbo_time_min.config(state=tstate)
+        self.cbo_time_s.config(state=tstate)
         self.brand_var.set(edits["brand"])
         self.on_brand_change()
         self.camera_var.set(edits["camera"])
@@ -757,7 +775,6 @@ class PhotoWatermarkApp:
         val = self.focal_var.get().strip()
         if val and not val.endswith("mm"):
             self.focal_var.set(f"{val}mm")
-        self.show_preview()
 
     def _on_time_change(self, event=None):
         """年月日时分秒组合成时间字符串"""
@@ -778,7 +795,6 @@ class PhotoWatermarkApp:
         # 同步保存到当前图片的用户修改
         if self.current_index in self._user_edits:
             self._user_edits[self.current_index]["datetime"] = self.time_var.get().strip()
-        self.show_preview()
 
     def _set_time_parts(self, dt):
         """把时间字符串拆分到年月日时分秒下拉框"""
@@ -911,7 +927,7 @@ class PhotoWatermarkApp:
                     data = self.get_data()
                     font_name = self.selected_font.get()
                     # 核心：直接复用 render_border，无需手动计算缩放
-                    bordered = WatermarkGenerator.render_border(thumb, data, font_name)
+                    bordered = WatermarkGenerator.render_border(thumb, data, font_name, self.border_bold.get())
                     thumb = bordered.convert("RGBA")
                 dlg.set_progress(2)
 
@@ -1018,7 +1034,7 @@ class PhotoWatermarkApp:
                                 "photo_name": ""
                             }
                         if self.enable_border.get():
-                            WatermarkGenerator.add_watermark(f, out, data, font)
+                            WatermarkGenerator.add_watermark(f, out, data, font, self.border_bold.get())
                         else:
                             shutil.copy2(f, out)
                         if self.enable_watermark.get() and self.simple_watermark_panel:
@@ -1028,15 +1044,18 @@ class PhotoWatermarkApp:
                                 wm_font = wm.get_font(wm.font_family.get(), wm.font_size.get(), wm.is_bold.get())
                                 color = wm.color_map[wm.font_color_var.get()]
                                 wm.add_scattered_watermarks(img, wm.watermark_text.get(), wm_font, color)
-                                img.convert("RGB").save(out, quality=95)
-                                # 恢复 EXIF（图片已按方向旋转，重置 Orientation 为 1）
+                                # 已有的EXIF项强制原样保留，不做任何修改
+                                exif_bytes = None
                                 try:
                                     exif_dict = piexif.load(f)
-                                    exif_dict['0th'][piexif.ImageIFD.Orientation] = 1
-                                    exif_bytes = piexif.dump(exif_dict)
-                                    piexif.insert(exif_bytes, out)
+                                    if exif_dict:
+                                        exif_bytes = piexif.dump(exif_dict)
                                 except:
                                     pass
+                                if exif_bytes:
+                                    img.convert("RGB").save(out, quality=95, exif=exif_bytes)
+                                else:
+                                    img.convert("RGB").save(out, quality=95)
                                                 # 隐形水印嵌入
                         if self.enable_hidden.get():
                             try:
