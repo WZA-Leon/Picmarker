@@ -6,3 +6,5 @@ temp/
 *.jpg
 len/
 *.len
+*.txt
+*.cmd
