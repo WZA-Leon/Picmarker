@@ -35,7 +35,7 @@ class SettingsWindow:
         # 水印管理区域
         edit_watermark_btn_frame = ttk.LabelFrame(main_frame, text="水印管理", padding=10)
         edit_watermark_btn_frame.pack(fill=tk.X, pady=(0, 15))
-        ttk.Button(edit_watermark_btn_frame, text="设置水印参数", command=None, width=15).pack(side=tk.LEFT, padx=10)
+        ttk.Button(edit_watermark_btn_frame, text="设置水印参数", command=self._open_settings_json, width=15).pack(side=tk.LEFT, padx=10)
 
         # 介绍内容（恢复滚动区域）
         intro_frame = ttk.LabelFrame(main_frame, text="软件介绍", padding=10)
@@ -194,6 +194,53 @@ class SettingsWindow:
         """更新缓存大小显示"""
         size = self._get_cache_size()
         self.cache_size_label.config(text=f"当前缓存大小：{self._format_size(size)}")
+
+    def _open_settings_json(self):
+        """用系统默认编辑器打开 settings.json 配置文件"""
+        import subprocess
+        import os
+        cfg_path = Path(__file__).parent / "settings.json"
+        if not cfg_path.exists():
+            messagebox.showwarning("设置水印参数", "配置文件 settings.json 不存在")
+            return
+        # 提示窗口：告知各配置项含义并提醒谨慎修改
+        tips = (
+            "⚠️ 请谨慎修改，改错可能导致程序无法正常运行！\n\n"
+            "【结构说明】\n"
+            "【gui】界面设置\n"
+            "  · font_family / font_size：界面字体与字号\n"
+            "  · title_font_size：标题字号\n"
+            "  · window_size：窗口大小\n"
+            "  · preview_auto_refresh：预览是否自动刷新 true/false\n"
+            "  · aperture_values：光圈下拉选项列表\n"
+            "  · shutter_values：快门下拉选项列表\n"
+            "  · iso_values：ISO 下拉选项列表\n"
+            "  · year_range：年份可选范围 [起始,结束]\n\n"
+            "【watermark】水印外观\n"
+            "  · background_color：背景色 [R,G,B] 0‑255\n"
+            "  · icon_margin_left/right：图标左右边距\n"
+            "  · vertical_center_offset：整体垂直居中偏移\n"
+            "  · left_text：左侧文字(camera/lens) x/y偏移\n"
+            "  · right_text：右侧文字(params/time) x/y偏移\n"
+            "  · fonts：camera/lens/name/params/time 各文字字号\n"
+            "  · colors：各模块文字RGB颜色 [R,G,B]\n"
+            "  · stroke：描边设置 enabled开关、width宽度、fill描边RGB颜色\n\n"
+            "【brand_icons】：品牌名称→图标文件名映射\n"
+            "【model_short_names】:完整相机型号 → 显示简称\n"
+            "【brand_fix_map】：EXIF原始品牌名 → 程序识别标准品牌名\n"
+            "【camera_database】：相机&镜头数据库，各品牌下 cameras相机列表、lenses镜头列表\n"
+            "修改前建议先备份原文件以防手残改坏了！\n"
+            "点击确定继续修改水印参数"
+        )
+        if not messagebox.askokcancel("设置水印参数", tips, icon="warning"):
+            return
+        try:
+            if os.name == "nt":
+                os.startfile(cfg_path)
+            else:
+                subprocess.call(["open", str(cfg_path)])
+        except Exception as e:
+            messagebox.showerror("设置水印参数", f"无法打开配置文件：{e}")
 
     def _clear_cache(self):
         """清除 temp 文件夹中的缓存文件"""
