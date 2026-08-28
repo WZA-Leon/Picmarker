@@ -12,8 +12,7 @@ import shutil
 import subprocess
 import hashlib
 import difflib
-
-from config import GUI_CFG, CAMERA_DB, WM_CFG
+from config import GUI_CFG, CAMERA_DB, WM_CFG, SETTINGS_PATH
 from utils import ExifReader, FontManager, WatermarkGenerator, CollapsiblePanel, apply_exif_orientation
 from ui_watermark import WatermarkApp
 from progress_util import ProgressDialog
@@ -31,7 +30,10 @@ class PhotoWatermarkApp:
         self.root.state("zoomed")
         self.input_files = []
         self.current_index = -1
-        self.output_path = tk.StringVar(value=str(Path.home() / "Desktop" / "水印输出"))
+        saved_out = GUI_CFG.get("output_path", "")
+        if not saved_out:
+            saved_out = str(Path.home() / "Desktop" / "水印输出")
+        self.output_path = tk.StringVar(value=saved_out)
         self.selected_font = tk.StringVar(value="Microsoft YaHei")
         self.font_list = FontManager.get_system_fonts()
         if self.font_list:
@@ -786,6 +788,19 @@ class PhotoWatermarkApp:
         d = filedialog.askdirectory(title="选择输出文件夹")
         if d:
             self.output_path.set(d)
+            self._save_output_path()
+
+    def _save_output_path(self):
+        """保存输出路径到 settings.json"""
+        try:
+            import json
+            with open(SETTINGS_PATH, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            settings.setdefault("gui", {})["output_path"] = self.output_path.get()
+            with open(SETTINGS_PATH, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
     def get_data(self):
         return {
             "brand": self.brand_var.get().strip(),

@@ -10,6 +10,7 @@ DEFAULT_SETTINGS = {
         "title_font_size": 11,
         "window_size": "1200x900",
         "preview_auto_refresh": True,
+        "output_path": "C:/Users//WZA/Desktop/水印输出",
         # ===== 相机参数下拉选项 =====
         "aperture_values": [
             "", "f/1.0", "f/1.1", "f/1.2", "f/1.4", "f/1.6", "f/1.8",
