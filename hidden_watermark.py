@@ -74,9 +74,12 @@ class DWTWatermark:
 
         # 文本转比特
         text_bits = self._text_to_bits(wm_text)
-        # 长度头 (16bit) + 文本比特
-        length_header = [(len(text_bits) >> i) & 1 for i in range(15, -1, -1)]
-        bits = length_header + text_bits
+        # 魔数标记 (16bit)，用于识别是否含水印
+        magic = [0x5A5A >> i & 1 for i in range(15, -1, -1)]
+        # 长度头 (16bit) + 魔数 + 文本比特
+        payload = magic + text_bits
+        length_header = [(len(payload) >> i) & 1 for i in range(15, -1, -1)]
+        bits = length_header + payload
         self.wm_bit = bits
 
         rng = self._init_rng(self.password)
@@ -98,7 +101,7 @@ class DWTWatermark:
                 cH[r, c] = -abs(cH[r, c]) - strength
 
         # 文本比特嵌入到随机位置（避开长度头区域），每个比特重复 redundancy 次
-        text_with_end = text_bits
+        text_with_end = payload
         total_bits = len(text_with_end) * redundancy
         text_indices = rng.choice(total_pixels - 16, total_bits, replace=False) + 16
         for pos, bit in zip(text_indices, [b for b in text_with_end for _ in range(redundancy)]):
@@ -191,7 +194,16 @@ class DWTWatermark:
         bits = [1 if sum(v) > redundancy // 2 else 0 for v in votes]
         self.wm_bit = bits
 
-        # 直接用长度头截取文本比特（前 text_len 个），无需结束标记
-        text_bits = bits[:text_len]
+        # 校验魔数标记，判断是否含水印
+        if wm_shape >= 16:
+            magic_bits = bits[:16]
+            magic = 0
+            for b in magic_bits:
+                magic = (magic << 1) | b
+            if magic != 0x5A5A:
+                return "没有水印"
+            text_bits = bits[16:wm_shape]
+        else:
+            return "没有水印"
         return self._bits_to_text(text_bits)
 

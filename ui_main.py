@@ -986,6 +986,7 @@ class PhotoWatermarkApp:
         def worker():
             success = 0
             is_extract = self.hidden_mode.get() == "extract" and self.enable_hidden.get()
+            extract_results = []  # 收集所有提取结果，最后统一弹窗
             # 【修复】遍历索引，每张图片使用自身的参数
             for idx_in_list, file_idx in enumerate(checked_indices):
                 f = self.input_files[file_idx]
@@ -998,9 +999,9 @@ class PhotoWatermarkApp:
                         pwd_int = int(pwd)
                         bw = DWTWatermark(password=pwd_int)
                         extracted = bw.extract(f)
-                        result_text = f"隐形水印提取 {name}: {extracted}"
+                        result_text = f"{name}: {extracted}"
                         print(result_text)
-                        self.root.after(0, lambda r=result_text: messagebox.showinfo("提取结果", r))
+                        extract_results.append(result_text)
                     else:
                         # 获取当前图片的专属参数
                         if file_idx in self._user_edits:
@@ -1059,7 +1060,11 @@ class PhotoWatermarkApp:
                 self.root.after(0, lambda v=idx_in_list+1: dlg.set_progress(v))
                 self.root.after(0, lambda v=f"{idx_in_list+1}/{total}": dlg.set_text(f"正在处理 {v}"))
             self.root.after(0, dlg.close)
-            if not is_extract:
+            if is_extract:
+                # 提取模式：一次性显示所有结果
+                msg = "\n".join(extract_results) if extract_results else "未提取到任何结果"
+                self.root.after(0, lambda m=msg: messagebox.showinfo("提取结果", m))
+            else:
                 self.root.after(0, lambda: messagebox.showinfo("处理完成", f"成功处理 {success}/{total} 张照片\n保存位置: {self.output_path.get()}"))
         threading.Thread(target=worker, daemon=True).start()
     

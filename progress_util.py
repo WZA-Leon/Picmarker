@@ -34,14 +34,16 @@ class ProgressDialog:
         self.dialog.update()
 
     def set_text(self, text):
+        if self._closed:
+            return
         self.label.config(text=text)
-        self.root.update()
-        self.dialog.update()
+        self.dialog.update_idletasks()
 
     def set_progress(self, value):
+        if self._closed:
+            return
         self.progress["value"] = value
-        self.root.update()
-        self.dialog.update()
+        self.dialog.update_idletasks()
 
     def close(self):
         if self._closed:
