@@ -119,6 +119,9 @@ class WatermarkGenerator:
     # 字体缓存：相同字体名+字号只加载一次，提升预览性能
     _font_cache = {}
 
+    # 字体族名 -> 字体文件路径 映射（从注册表读取，一次性构建）
+    _font_map = None
+
     # 中文字体显示名 -> 注册表英文名映射（仅注册表里是英文名的字体）
     _CN_FONT_MAP = {
         "宋体": "SimSun", "新宋体": "SimSun", "黑体": "SimHei",
@@ -127,106 +130,116 @@ class WatermarkGenerator:
     }
 
     @staticmethod
-    def get_font(name, size, bold=False):
-        cache_key = (name.lower(), size, bold)
-        if cache_key in WatermarkGenerator._font_cache:
-            return WatermarkGenerator._font_cache[cache_key]
-
-        # 中文字体显示名映射到注册表英文名，便于匹配
-        name = WatermarkGenerator._CN_FONT_MAP.get(name.strip(), name)
-
-        # 通过注册表枚举系统字体，优先选择中文字体
-        cn_keywords = ["yahei", "msyh", "simsun", "simhei", "dengxian",
-                       "kaiti", "fangsong", "song", "hei", "kai", "fang"]
-        bold_keywords = ["bold", "bd", "粗体", "黑体"]
+    def _build_font_map():
+        """从注册表构建 字体族名 -> 文件路径 映射，只构建一次。"""
+        if WatermarkGenerator._font_map is not None:
+            return WatermarkGenerator._font_map
+        mapping = {}
         try:
             if platform.system() == "Windows":
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
                                      r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts")
                 i = 0
-                cn_candidates = []
-                bold_candidates = []
                 while True:
                     try:
                         fname, fpath, _ = winreg.EnumValue(key, i)
                         if ".ttf" in fpath.lower() or ".ttc" in fpath.lower():
-                            full_path = os.path.join("C:/Windows/Fonts", fpath)
-                            if os.path.exists(full_path):
-                                # 优先匹配用户选择的字体名
+                            full = os.path.join("C:/Windows/Fonts", fpath)
+                            if os.path.exists(full):
                                 clean = fname.split(" (TrueType)")[0].split(" (OpenType)")[0]
-                                # 去掉粗体/斜体等变体后缀，便于与用户选择的字体名匹配
-                                clean_base = clean
-                                for kw in bold_keywords + ["italic", "oblique", "regular", "light", "medium", "semibold", "thin"]:
-                                    clean_base = clean_base.replace(kw, "").replace(kw.capitalize(), "")
-                                clean_base = clean_base.strip()
-                                nl = name.lower()
-                                cl = clean_base.lower()
-                                # 精确匹配，或前缀匹配（如 "Microsoft YaHei" 匹配 "Microsoft YaHei & Microsoft YaHei UI"）
-                                if nl == cl or cl.startswith(nl) or nl.startswith(cl):
-                                    # 加粗时优先用粗体变体
-                                    if bold and any(k in fname.lower() for k in bold_keywords):
-                                        font = ImageFont.truetype(full_path, size)
-                                        WatermarkGenerator._font_cache[cache_key] = font
-                                        return font
-                                    if not bold:
-                                        font = ImageFont.truetype(full_path, size)
-                                        WatermarkGenerator._font_cache[cache_key] = font
-                                        return font
-                                # 收集中文字体作为候选
-                                if any(k in fname.lower() for k in cn_keywords):
-                                    if bold and any(k in fname.lower() for k in bold_keywords):
-                                        bold_candidates.append(full_path)
-                                    cn_candidates.append(full_path)
+                                mapping[clean] = full
                         i += 1
                     except:
                         break
-                # 加粗时优先用粗体中文字体
-                if bold:
-                    for full_path in bold_candidates:
-                        try:
-                            font = ImageFont.truetype(full_path, size)
-                            WatermarkGenerator._font_cache[cache_key] = font
-                            return font
-                        except:
-                            continue
-                # 用户字体未找到时，优先用中文字体
-                for full_path in cn_candidates:
-                    try:
-                        font = ImageFont.truetype(full_path, size)
-                        WatermarkGenerator._font_cache[cache_key] = font
-                        return font
-                    except:
-                        continue
         except:
             pass
+        WatermarkGenerator._font_map = mapping
+        return mapping
 
-        # 回退：直接按名字加载
-        try:
-            font = ImageFont.truetype(name, size)
-            WatermarkGenerator._font_cache[cache_key] = font
-            return font
-        except:
-            pass
-        font_paths = [
-            f"C:\\Windows\\Fonts\\{name}.ttf",
-            f"C:\\Windows\\Fonts\\{name}.ttc",
-            "C:\\Windows\\Fonts\\arial.ttf",
-        ]
+    # 字体变体词：匹配时忽略，避免 "Microsoft YaHei UI Light" 匹配到 "Microsoft YaHei"
+    _VARIANT_WORDS = {"bold", "italic", "light", "regular", "medium", "semibold",
+                      "thin", "black", "oblique", "ui", "extb", "extg", "narrow",
+                      "condensed", "semi", "demi", "book", "display", "text"}
+
+    @staticmethod
+    def _font_words(name):
+        """把字体名拆成有意义的关键词（去掉变体词）。"""
+        words = set()
+        for w in name.lower().replace("&", " ").split():
+            w = w.strip(" .-_")
+            if w and w not in WatermarkGenerator._VARIANT_WORDS:
+                words.add(w)
+        return words
+
+    @staticmethod
+    def _find_font_path(name, bold):
+        """根据字体族名查找字体文件路径，返回路径或 None。"""
+        mapping = WatermarkGenerator._build_font_map()
+        nl = name.lower()
+        # 1. 加粗时优先粗体变体（如 "Arial" -> "Arial Bold"）
         if bold:
-            font_paths = [
-                "C:\\Windows\\Fonts\\msyhbd.ttc",
-                "C:\\Windows\\Fonts\\simhei.ttf",
-                f"C:\\Windows\\Fonts\\{name}.ttf",
-                f"C:\\Windows\\Fonts\\{name}.ttc",
-                "C:\\Windows\\Fonts\\arial.ttf",
-            ]
-        for path in font_paths:
+            for key, path in mapping.items():
+                if "bold" in key.lower() and nl in key.lower():
+                    return path
+        # 2. 精确匹配
+        if name in mapping:
+            return mapping[name]
+        # 3. 单词级匹配：字体名关键词全部出现在注册表键中
+        #    如 "Microsoft YaHei UI" -> {microsoft, yahei} 匹配 "Microsoft YaHei & Microsoft YaHei UI"
+        target_words = WatermarkGenerator._font_words(name)
+        if target_words:
+            best_key, best_path = None, None
+            best_score = -1
+            for key, path in mapping.items():
+                key_words = WatermarkGenerator._font_words(key)
+                if target_words <= key_words:  # 目标词全部包含
+                    score = len(key_words)
+                    if score > best_score:
+                        best_score = score
+                        best_key, best_path = key, path
+            if best_path:
+                return best_path
+        # 4. 前缀匹配兜底
+        for key, path in mapping.items():
+            kl = key.lower()
+            if kl == nl or kl.startswith(nl) or nl.startswith(kl):
+                return path
+        return None
+
+    @staticmethod
+    def get_font(name, size, bold=False):
+        cache_key = (name.lower(), size, bold)
+        if cache_key in WatermarkGenerator._font_cache:
+            return WatermarkGenerator._font_cache[cache_key]
+
+        # 中文字体显示名映射到注册表英文名
+        name = WatermarkGenerator._CN_FONT_MAP.get(name.strip(), name)
+
+        # 1. 通过注册表映射查找字体文件路径
+        path = WatermarkGenerator._find_font_path(name, bold)
+        if path:
             try:
                 font = ImageFont.truetype(path, size)
                 WatermarkGenerator._font_cache[cache_key] = font
                 return font
             except:
+                pass
+
+        # 2. 回退：常见中文字体
+        fallback = ["C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/simhei.ttf",
+                    "C:/Windows/Fonts/simsun.ttc", "C:/Windows/Fonts/arial.ttf"]
+        if bold:
+            fallback = ["C:/Windows/Fonts/msyhbd.ttc", "C:/Windows/Fonts/simhei.ttf",
+                        "C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/arial.ttf"]
+        for p in fallback:
+            try:
+                font = ImageFont.truetype(p, size)
+                WatermarkGenerator._font_cache[cache_key] = font
+                return font
+            except:
                 continue
+
+        # 3. 最终回退
         font = ImageFont.load_default()
         WatermarkGenerator._font_cache[cache_key] = font
         return font

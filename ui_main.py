@@ -167,6 +167,10 @@ class PhotoWatermarkApp:
         # 滚轮支持 - 滚动时自动切换焦点到列表
         def _on_list_mousewheel(event):
             self.checklist_canvas.focus_set()
+            # 内容不足可视高度时禁止滚动
+            bbox = self.checklist_canvas.bbox("all")
+            if bbox and bbox[3] <= self.checklist_canvas.winfo_height():
+                return "break"
             self.checklist_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
         self.checklist_canvas.bind("<MouseWheel>", _on_list_mousewheel, add="+")
@@ -351,7 +355,7 @@ class PhotoWatermarkApp:
         self.canvas.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         action_frame = ttk.Frame(right_frame)
         action_frame.pack(fill=tk.X, pady=6)
-        ttk.Button(action_frame, text="刷新预览", command=self.show_preview).pack(side=tk.LEFT, padx=2)
+        ttk.Button(action_frame, text="刷新预览", command=self.force_refresh_preview).pack(side=tk.LEFT, padx=2)
         ttk.Button(action_frame, text="处理照片", command=self.start_batch).pack(side=tk.RIGHT, padx=2)
         self.canvas.bind("<Configure>", lambda e: self.root.after(200, self.show_preview))
         def _toggle_left_scrollbar():
@@ -584,6 +588,10 @@ class PhotoWatermarkApp:
         # 为所有子控件绑定滚轮事件
         def _row_mousewheel(event):
             self.checklist_canvas.focus_set()
+            # 内容不足可视高度时禁止滚动
+            bbox = self.checklist_canvas.bbox("all")
+            if bbox and bbox[3] <= self.checklist_canvas.winfo_height():
+                return "break"
             self.checklist_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
             return "break"
         for widget in (row, cb, lbl):
@@ -817,8 +825,15 @@ class PhotoWatermarkApp:
         wm_font = wm.font_family.get() if wm else ""
         wm_size = wm.font_size.get() if wm else 0
         wm_color = wm.font_color_var.get() if wm else ""
-        raw = f"{self.current_index}|{self.enable_border.get()}|{self.enable_watermark.get()}|{self.selected_font.get()}|{data['brand']}|{data['camera']}|{data['lens']}|{data['photo_name']}|{data['focal']}|{data['f']}|{data['exp']}|{data['iso']}|{data['datetime']}|{data['location']}|{wm_text}|{wm_font}|{wm_size}|{wm_color}"
+        wm_bold = wm.is_bold.get() if wm else False
+        raw = f"{self.current_index}|{self.enable_border.get()}|{self.enable_watermark.get()}|{self.selected_font.get()}|{self.border_bold.get()}|{data['brand']}|{data['camera']}|{data['lens']}|{data['photo_name']}|{data['focal']}|{data['f']}|{data['exp']}|{data['iso']}|{data['datetime']}|{data['location']}|{wm_text}|{wm_font}|{wm_size}|{wm_color}|{wm_bold}"
         return hashlib.md5(raw.encode()).hexdigest()
+
+    def force_refresh_preview(self):
+        """强制刷新预览：清空缓存后重新渲染，确保显示进度条"""
+        self._cached_params = {}
+        self._cached_preview_path = None
+        self.show_preview()
 
     def show_preview(self):
         if not self.input_files or self.current_index == -1:

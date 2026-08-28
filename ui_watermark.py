@@ -47,6 +47,8 @@ class WatermarkApp:
         size_spin.bind("<MouseWheel>", lambda e: "break", add="+")
         size_spin.bind("<Button-4>", lambda e: "break", add="+")
         size_spin.bind("<Button-5>", lambda e: "break", add="+")
+        # 失焦时钳制字号到 10-100，防止手动输入越界
+        size_spin.bind("<FocusOut>", lambda e: self._clamp_font_size())
 
         ttk.Label(settings_frame, text="字体颜色:").grid(row=2, column=0, sticky=tk.W, pady=(5,0))
         color_options = list(self.color_map.keys())
@@ -79,8 +81,21 @@ class WatermarkApp:
                 x += spacing
             y += spacing
 
+    def _clamp_font_size(self):
+        """失焦时钳制字号到 10-100，防止手动输入越界"""
+        try:
+            val = int(self.font_size.get())
+        except (ValueError, tk.TclError):
+            val = 20
+        if val < 10 or val > 100:
+            messagebox.showwarning("字号范围", "字号必须在 10-100 之间，已自动调整。")
+        val = max(10, min(100, val))
+        self.font_size.set(val)
+
     def get_font(self, family, size, bold=False):
         # 统一使用 WatermarkGenerator 的字体加载机制（与边框水印一致）
+        # 钳制字号范围 10-100，防止手动输入越界
+        size = max(10, min(100, int(size)))
         return WatermarkGenerator.get_font(family, size, bold)
 
     def create_rotated_text_image(self, text, font, color):
