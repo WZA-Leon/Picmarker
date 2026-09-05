@@ -8,3 +8,5 @@ len/
 *.len
 *.txt
 *.cmd
+.vscode/
+runtime/
