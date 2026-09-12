@@ -1,6 +1,8 @@
 # Picmarker V1.3 - 专业图片水印工具
 
-![项目Logo](https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/icons/icon.png)
+<div align="center">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/icons/icon.png" alt="Picmarker V1.3" width="100%">
+</div>
 
 ## 软件概述
 
