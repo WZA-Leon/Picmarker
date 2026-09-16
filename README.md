@@ -106,7 +106,17 @@ Picmarker 基于 Python 和 Tkinter 开发，天然具备优秀的跨平台能�
 
 ## 水印打包效果图
 
-### 纯边框水印
+### 纯打边框水印
 <div align="center">
-  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example.jpg" alt="photo" width="100%">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example (1).jpg" alt="photo" width="100%">
+</div>
+
+### 纯打文字水印
+<div align="center">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example (2).jpg" alt="photo" width="100%">
+</div>
+
+### 文字水印和边框水印一起打
+<div align="center">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example (3).jpg" alt="photo" width="100%">
 </div>
