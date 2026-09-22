@@ -104,6 +104,19 @@ Picmarker 基于 Python 和 Tkinter 开发，天然具备优秀的跨平台能�
 2. **命令行模式**：支持无 GUI 的批量脚本处理
 3. **更多格式图片支持**：支持处理CR3、NEF等高级原始图片格式
 
-## 总结
+## 水印打包效果图
 
-Picmarker 是一款轻量级但功能强大的图片水印工具，特别适合摄影爱好者和内容创作者使用。它集 EXIF 信息展示、可见水印、隐形水印于一体，提供批量处理和实时预览，是图片版权保护和图片美化的得力助手。虽然现在功能相对简易，但是WZA未来将持续升级该软件，增加更多实用功能，打造一站式的图片处理解决方案。
+### 纯打边框水印
+<div align="center">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example (1).jpg" alt="photo" width="100%">
+</div>
+
+### 纯打文字水印
+<div align="center">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example (2).jpg" alt="photo" width="100%">
+</div>
+
+### 文字水印和边框水印一起打
+<div align="center">
+  <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example (3).jpg" alt="photo" width="100%">
+</div>
