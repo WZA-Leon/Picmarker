@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Picmarker 软件使用教程</title>
+<style>
+  :root {
+    --brand: #4d6bfe;
+    --brand-2: #6b8cff;
+    --brand-3: #3a54d6;
+    --bg: #f7f9fc;
+    --card: #ffffff;
+    --text: #1a1d29;
+    --text-2: #5a6072;
+    --line: #e6eaf2;
+    --code-bg: #f2f5fb;
+    --radius: 16px;
+    --shadow: 0 8px 30px rgba(77, 107, 254, .10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ===== 顶部光影背景 ===== */
+  .hero {
+    position: relative;
+    padding: 90px 24px 70px;
+    text-align: center;
+    overflow: hidden;
+    background: linear-gradient(160deg, #eef2ff 0%, #f7f9fc 55%, #eaf0ff 100%);
+  }
+
+  .hero::before,
+  .hero::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: .55;
+    pointer-events: none;
+  }
+  .hero::before {
+    width: 460px; height: 460px;
+    background: radial-gradient(circle, #4d6bfe 0%, rgba(77,107,254,0) 70%);
+    top: -160px; left: -80px;
+    animation: float1 14s ease-in-out infinite;
+  }
+  .hero::after {
+    width: 520px; height: 520px;
+    background: radial-gradient(circle, #6b8cff 0%, rgba(107,140,255,0) 70%);
+    top: -120px; right: -120px;
+    animation: float2 18s ease-in-out infinite;
+  }
+
+  @keyframes float1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(60px, 40px) scale(1.15); }
+  }
+  @keyframes float2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50%      { transform: translate(-70px, 50px) scale(1.1); }
+  }
+
+  .hero-inner { position: relative; z-index: 2; max-width: 860px; margin: 0 auto; }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brand);
+    background: rgba(255,255,255,.7);
+    border: 1px solid rgba(77,107,254,.18);
+    padding: 8px 18px;
+    border-radius: 999px;
+    backdrop-filter: blur(8px);
+    margin-bottom: 26px;
+    box-shadow: 0 4px 18px rgba(77,107,254,.12);
+  }
+  .logo .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    box-shadow: 0 0 12px var(--brand);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.4); opacity: .6; }
+  }
+
+  .hero h1 {
+    font-size: clamp(34px, 6vw, 56px);
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+    background: linear-gradient(120deg, #1a1d29 0%, var(--brand) 55%, var(--brand-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+  }
+
+  .hero p {
+    font-size: clamp(15px, 2.2vw, 18px);
+    color: var(--text-2);
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  /* ===== 主体 ===== */
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 24px 100px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 34px 36px;
+    margin-top: 26px;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--brand), var(--brand-2), transparent);
+    opacity: 0;
+    transition: opacity .35s;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 44px rgba(77,107,254,.16);
+  }
+  .card:hover::before { opacity: 1; }
+
+  .card h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .card h2 .num {
+    flex: none;
+    width: 34px; height: 34px;
+    display: grid; place-items: center;
+    border-radius: 10px;
+    font-size: 15px;
+    color: #fff;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    box-shadow: 0 6px 16px rgba(77,107,254,.35);
+  }
+
+  .card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 22px 0 10px;
+    color: var(--brand-3);
+  }
+
+  .card p { color: var(--text-2); margin-bottom: 12px; }
+
+  ul.feature { list-style: none; display: grid; gap: 12px; }
+  ul.feature li {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: linear-gradient(90deg, rgba(77,107,254,.05), rgba(77,107,254,0));
+    border-left: 3px solid var(--brand);
+    border-radius: 8px;
+    color: var(--text-2);
+    transition: background .3s, transform .3s;
+  }
+  ul.feature li:hover {
+    background: linear-gradient(90deg, rgba(77,107,254,.12), rgba(77,107,254,.02));
+    transform: translateX(4px);
+  }
+  ul.feature li b { color: var(--text); font-weight: 600; }
+
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--code-bg);
+    color: var(--brand-3);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: .9em;
+  }
+
+  pre {
+    background: #0f1424;
+    color: #d6e0ff;
+    padding: 18px 20px;
+    border-radius: 12px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.7;
+    margin: 12px 0;
+    border: 1px solid #1c2540;
+    position: relative;
+  }
+  pre::after {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--brand), transparent);
+    opacity: .6;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 14.5px;
+  }
+  th, td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  th {
+    background: linear-gradient(90deg, rgba(77,107,254,.08), rgba(77,107,254,.02));
+    color: var(--brand-3);
+    font-weight: 600;
+  }
+  tr:hover td { background: rgba(77,107,254,.04); }
+
+  .note {
+    background: linear-gradient(90deg, rgba(77,107,254,.08), rgba(77,107,254,.02));
+    border-left: 3px solid var(--brand);
+    padding: 12px 16px;
+    border-radius: 8px;
+    color: var(--text-2);
+    font-size: 14.5px;
+    margin: 14px 0;
+  }
+
+  figure.shot { margin: 18px 0 6px; }
+  figure.shot img {
+    width: 100%;
+    display: block;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    box-shadow: 0 12px 32px rgba(77,107,254,.14);
+    transition: transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .45s;
+  }
+  figure.shot img:hover {
+    transform: translateY(-4px) scale(1.006);
+    box-shadow: 0 20px 46px rgba(77,107,254,.24);
+  }
+  figure.shot figcaption {
+    text-align: center;
+    font-size: 13.5px;
+    color: var(--text-2);
+    margin-top: 10px;
+  }
+
+  .step {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: linear-gradient(90deg, rgba(77,107,254,.05), rgba(77,107,254,0));
+    border-left: 3px solid var(--brand);
+    border-radius: 8px;
+    color: var(--text-2);
+    margin-bottom: 10px;
+  }
+  .step .n {
+    flex: none;
+    width: 24px; height: 24px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    box-shadow: 0 4px 10px rgba(77,107,254,.32);
+    margin-top: 2px;
+  }
+
+  footer {
+    text-align: center;
+    padding: 40px 24px 60px;
+    color: var(--text-2);
+    font-size: 14px;
+  }
+  footer a { color: var(--brand); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* 滚动淡入 */
+  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
+  .reveal.show { opacity: 1; transform: none; }
+
+  @media (max-width: 640px) {
+    .card { padding: 24px 20px; }
+    .hero { padding: 64px 20px 48px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="logo"><span class="dot"></span> By WZA-Leon · V1.3</div>
+    <h1>Picmarker 软件教程</h1>
+    <p>专业图片水印工具，集成边框水印、明文水印与隐形水印三大核心功能，支持批量处理。本教程将带你快速了解并上手使用。</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="card reveal">
+    <h2><span class="num">1</span>软件概述</h2>
+    <p>
+      Picmarker 是一款面向<strong>摄影爱好者</strong>、<strong>自媒体创作者</strong>和<strong>图片版权保护需求者</strong>的专业图片水印工具。
+      软件采用 Python 开发，基于 Tkinter 图形界面框架，提供直观易用的操作体验。
+    </p>
+    <p>
+      当前版本为 <b>V1.3</b>，这是 Picmarker 自 V1.0 最基础简单版本（只能添加明文水印）之后的一次全面升级的大版本，
+      集成了<strong>边框水印</strong>、<strong>明文水印</strong>和<strong>隐形水印</strong>三大核心功能，
+      支持批量处理，能够高效地为照片添加专业级版权标识。
+    </p>
+  </section>
+
+  <section class="card reveal">
+    <h2><span class="num">2</span>核心功能</h2>
+
+    <h3>2.1 添加边框（EXIF 信息水印）</h3>
+    <p>自动读取照片的 EXIF 信息（相机品牌、型号、镜头、焦距、光圈、快门、ISO、拍摄时间等），在图片底部生成一个信息条。支持：</p>
+    <ul class="feature">
+      <li><b>自动识别相机品牌</b>并显示对应品牌图标</li>
+      <li><b>自定义字体选择</b>，支持系统所有已安装字体</li>
+      <li><b>可编辑 EXIF 信息</b>，支持手动修改</li>
+      <li><b>品牌 - 相机 - 镜头三级联动选择</b></li>
+    </ul>
+
+    <h3>2.2 明文水印（可见水印）</h3>
+    <p>在图片表面叠加用户自定义的可见水印文字，支持：</p>
+    <ul class="feature">
+      <li><b>自定义水印文字内容</b></li>
+      <li><b>多种字体选择</b></li>
+      <li><b>字体大小调节</b>（10 - 100px）</li>
+      <li><b>五种颜色选择</b>（黑、白、红、蓝、绿）</li>
+      <li><b>加粗样式</b></li>
+      <li><b>45° 倾斜散布排列</b>，覆盖全图</li>
+    </ul>
+
+    <h3>2.3 隐形水印（DWT 小波变换）</h3>
+    <p>基于离散小波变换（DWT）的盲水印技术，将版权信息嵌入图片的频域中，人眼不可见。支持：</p>
+    <ul class="feature">
+      <li><b>密码保护</b>（默认 123456）</li>
+      <li><b>自定义加密内容</b></li>
+      <li><b>嵌入与提取双模式</b></li>
+      <li><b>抗裁剪、抗压缩能力
