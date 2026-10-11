@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Picmarker 软件使用教程</title>
+<title>Picmarker · 软件教程</title>
 <style>
   :root {
     --brand: #4d6bfe;
@@ -273,30 +273,6 @@
     margin-top: 10px;
   }
 
-  .step {
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-    padding: 12px 16px;
-    background: linear-gradient(90deg, rgba(77,107,254,.05), rgba(77,107,254,0));
-    border-left: 3px solid var(--brand);
-    border-radius: 8px;
-    color: var(--text-2);
-    margin-bottom: 10px;
-  }
-  .step .n {
-    flex: none;
-    width: 24px; height: 24px;
-    display: grid; place-items: center;
-    border-radius: 50%;
-    font-size: 12.5px;
-    font-weight: 700;
-    color: #fff;
-    background: linear-gradient(135deg, var(--brand), var(--brand-2));
-    box-shadow: 0 4px 10px rgba(77,107,254,.32);
-    margin-top: 2px;
-  }
-
   footer {
     text-align: center;
     padding: 40px 24px 60px;
@@ -305,10 +281,6 @@
   }
   footer a { color: var(--brand); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
-
-  /* 滚动淡入 */
-  .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
-  .reveal.show { opacity: 1; transform: none; }
 
   @media (max-width: 640px) {
     .card { padding: 24px 20px; }
@@ -328,7 +300,8 @@
 
 <main class="wrap">
 
-  <section class="card reveal">
+  <!-- 1 软件概述 -->
+  <section class="card">
     <h2><span class="num">1</span>软件概述</h2>
     <p>
       Picmarker 是一款面向<strong>摄影爱好者</strong>、<strong>自媒体创作者</strong>和<strong>图片版权保护需求者</strong>的专业图片水印工具。
@@ -341,7 +314,8 @@
     </p>
   </section>
 
-  <section class="card reveal">
+  <!-- 2 核心功能 -->
+  <section class="card">
     <h2><span class="num">2</span>核心功能</h2>
 
     <h3>2.1 添加边框（EXIF 信息水印）</h3>
@@ -370,4 +344,163 @@
       <li><b>密码保护</b>（默认 123456）</li>
       <li><b>自定义加密内容</b></li>
       <li><b>嵌入与提取双模式</b></li>
-      <li><b>抗裁剪、抗压缩能力
+      <li><b>抗裁剪、抗压缩能力强</b></li>
+      <li><b>支持大图，无尺寸限制</b></li>
+    </ul>
+
+    <h3>2.4 批量处理</h3>
+    <ul class="feature">
+      <li><b>支持多张图片同时添加 / 删除</b></li>
+      <li><b>复选框选择要处理的图片</b></li>
+      <li><b>实时预览效果</b></li>
+      <li><b>进度条显示处理进度</b></li>
+      <li><b>自动保留原始 EXIF 信息</b></li>
+    </ul>
+  </section>
+
+  <!-- 3 使用场景 -->
+  <section class="card">
+    <h2><span class="num">3</span>使用场景</h2>
+    <table>
+      <thead>
+        <tr><th>场景</th><th>适用功能</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>摄影作品发布</td><td>边框水印展示相机参数，提升专业感</td></tr>
+        <tr><td>自媒体内容保护</td><td>明文水印防止盗图</td></tr>
+        <tr><td>版权溯源</td><td>隐形水印嵌入版权信息，维权取证</td></tr>
+        <tr><td>摄影器材评测</td><td>边框水印展示 EXIF 参数</td></tr>
+        <tr><td>批量图片处理</td><td>同时处理数百张照片</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 4 运行环境与安装 -->
+  <section class="card">
+    <h2><span class="num">4</span>运行环境与安装</h2>
+
+    <h3>环境要求</h3>
+    <table>
+      <thead>
+        <tr><th>项目</th><th>要求</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>操作系统</td><td>Windows / macOS / Linux（跨平台兼容）</td></tr>
+        <tr><td>Python 版本</td><td>Python 3.8+</td></tr>
+        <tr><td>依赖库</td><td><code>Pillow</code>、<code>piexif</code>、<code>exifread</code>、<code>pywt</code>、<code>numpy</code></td></tr>
+        <tr><td>硬件要求</td><td>无特殊要求，建议 4GB 以上内存</td></tr>
+      </tbody>
+    </table>
+
+    <h3>安装依赖</h3>
+    <p>在项目根目录下执行：</p>
+    <pre><code>pip install Pillow piexif exifread pywt numpy</code></pre>
+    <div class="note">
+      如果使用虚拟环境，请先激活环境再安装。所有依赖均为跨平台库，安装后即可在 Windows、macOS、Linux 上运行。
+    </div>
+
+    <h3>启动软件</h3>
+    <pre><code>python Picmarker.py</code></pre>
+    <p>启动后将出现图形界面，按照下方章节操作即可。</p>
+  </section>
+
+  <!-- 5 跨平台兼容性 -->
+  <section class="card">
+    <h2><span class="num">5</span>跨平台兼容性</h2>
+    <p>
+      Picmarker 基于 Python 和 Tkinter 开发，天然具备优秀的跨平台能力，可在
+      <b>Windows、macOS、Linux</b> 三大主流操作系统上无缝运行。
+      无论你使用哪种系统，都能获得一致的操作体验和完整的全部功能支持。
+    </p>
+    <p>
+      软件依赖库均为跨平台库，无需额外适配即可在不同系统上正常工作，真正做到
+      <b>“一次开发，多系统使用”</b>。
+    </p>
+  </section>
+
+  <!-- 6 技术架构 -->
+  <section class="card">
+    <h2><span class="num">6</span>技术架构</h2>
+    <table>
+      <thead>
+        <tr><th>模块</th><th>技术选型</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>GUI 框架</td><td><code>Tkinter</code> + <code>ttk</code> 主题组件</td></tr>
+        <tr><td>图像处理</td><td><code>Pillow (PIL)</code></td></tr>
+        <tr><td>EXIF 读写</td><td><code>exifread</code>（读取）+ <code>piexif</code>（写入）</td></tr>
+        <tr><td>隐形水印</td><td><code>PyWavelets (DWT)</code> + <code>NumPy</code></td></tr>
+        <tr><td>配置管理</td><td>JSON 配置文件（<code>settings.json</code>）</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 7 未来发展规划 -->
+  <section class="card">
+    <h2><span class="num">7</span>未来发展规划</h2>
+
+    <h3>短期计划（V1.4 - V1.5）</h3>
+    <ul class="feature">
+      <li><b>图片标注功能</b>：支持在图片上添加箭头、矩形框、文字标注等，适用于教学和说明场景</li>
+      <li><b>图片基础调节</b>：集成亮度、对比度、饱和度、色温等基础调色功能，减少对第三方软件的依赖</li>
+      <li><b>边框模板增加</b>：添加更多样式的图片边框模板，满足更多用户的审美需求</li>
+      <li><b>隐形水印优化</b>：提升 DWT 水印的鲁棒性，增强抗 JPEG 压缩、缩放、裁剪等攻击的能力</li>
+      <li><b>隐形水印方式调节</b>：采用更加强悍的 <code>blind_watermark</code> 库，抗裁剪、旋转、缩放、遮挡</li>
+      <li><b>使用体验调节</b>：增加右键直接在当前文件夹打开 Picmarker，增加多语言、窗口外观调节功能</li>
+    </ul>
+
+    <h3>中期计划（V1.6 - V2.0）</h3>
+    <ul class="feature">
+      <li><b>更多水印样式</b>：支持自定义水印模板，包括位置、角度、透明度、平铺方式等参数的自由调节</li>
+      <li><b>水印预设系统</b>：保存用户常用水印配置为预设，一键切换</li>
+      <li><b>深度用户自定义 GUI</b>：让用户自由调整界面布局与控件组织方式</li>
+      <li><b>图片格式转换</b>：支持批量转换输出格式（JPG / PNG / TIFF / WebP）</li>
+    </ul>
+
+    <h3>长期规划（V2.0+）</h3>
+    <ul class="feature">
+      <li><b>插件系统</b>：开放第三方插件接口，社区贡献更多水印算法</li>
+      <li><b>命令行模式</b>：支持无 GUI 的批量脚本处理</li>
+      <li><b>更多格式图片支持</b>：支持处理 CR3、NEF 等高级原始图片格式</li>
+    </ul>
+  </section>
+
+  <!-- 8 效果图 -->
+  <section class="card">
+    <h2><span class="num">8</span>水印打包效果图</h2>
+
+    <h3>纯打边框水印</h3>
+    <figure class="shot">
+      <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example%20(1).jpg"
+           alt="纯打边框水印效果图" loading="lazy">
+      <figcaption>仅添加 EXIF 信息边框，底部信息条展示相机参数</figcaption>
+    </figure>
+
+    <h3>纯打文字水印</h3>
+    <figure class="shot">
+      <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example%20(2).jpg"
+           alt="纯打文字水印效果图" loading="lazy">
+      <figcaption>45° 倾斜散布的可见明文水印，覆盖全图</figcaption>
+    </figure>
+
+    <h3>文字水印和边框水印一起打</h3>
+    <figure class="shot">
+      <img src="https://raw.githubusercontent.com/WZA-Leon/Picmarker/main/examples/example%20(3).jpg"
+           alt="文字水印与边框水印组合效果图" loading="lazy">
+      <figcaption>边框水印 + 明文水印组合，兼顾专业感与版权保护</figcaption>
+    </figure>
+  </section>
+
+</main>
+
+<footer>
+  <p>Picmarker · 专业图片水印工具</p>
+  <p style="margin-top:8px">
+    <a href="https://github.com/WZA-Leon/Picmarker" target="_blank">GitHub 仓库</a>
+    &nbsp;·&nbsp;
+    <a href="https://github.com/WZA-Leon/Picmarker/releases/latest" target="_blank">下载最新版</a>
+  </p>
+</footer>
+
+</body>
+</html>
